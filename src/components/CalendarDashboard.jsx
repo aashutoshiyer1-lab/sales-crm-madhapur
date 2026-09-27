@@ -117,10 +117,10 @@ export default function CalendarDashboard({
         
         {/* Date Selector in Blue Box */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div className="flex items-center bg-blue-50/70 p-1 rounded-xl border-2 border-blue-200">
+          <div className="flex items-center bg-white p-1 rounded-xl border-2 border-blue-300 shadow-xs">
             <button
               onClick={() => handleShiftDate(-1)}
-              className="p-2 hover:bg-white rounded-lg text-blue-800 transition active:scale-95"
+              className="p-2 hover:bg-blue-50 rounded-lg text-blue-800 transition active:scale-95"
               title="Previous Day"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -189,11 +189,11 @@ export default function CalendarDashboard({
             </select>
           </div>
 
-          {/* Filter by Game in Blue Box */}
+          {/* Filter by Game in Pure White Box */}
           <select
             value={selectedGameFilter}
             onChange={(e) => setSelectedGameFilter(e.target.value)}
-            className="bg-blue-50/60 border-2 border-blue-200 text-blue-950 font-black text-xs sm:text-sm rounded-xl px-3 py-2.5 outline-none cursor-pointer"
+            className="bg-white border-2 border-blue-300 text-blue-950 font-black text-xs sm:text-sm rounded-xl px-3 py-2.5 outline-none cursor-pointer"
           >
             <option value="ALL">All Games ({GAMES.length})</option>
             {GAMES.map(g => (

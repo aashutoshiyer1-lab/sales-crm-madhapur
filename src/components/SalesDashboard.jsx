@@ -464,7 +464,7 @@ export default function SalesDashboard({
             placeholder="Search customer name, phone, game, or reference..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-blue-50/40 border-2 border-blue-200 rounded-xl text-xs sm:text-sm font-bold text-slate-900 placeholder:text-blue-400 outline-none focus:border-blue-600 transition"
+            className="w-full pl-10 pr-4 py-2.5 bg-white border-2 border-blue-200 rounded-xl text-xs sm:text-sm font-bold text-slate-900 placeholder:text-blue-400 outline-none focus:border-blue-600 transition"
           />
         </div>
 
@@ -474,7 +474,7 @@ export default function SalesDashboard({
           <select
             value={selectedPaymentMode}
             onChange={(e) => setSelectedPaymentMode(e.target.value)}
-            className="bg-blue-50/60 border-2 border-blue-200 text-blue-950 font-bold text-xs sm:text-sm rounded-xl px-3 py-2.5 outline-none w-full md:w-56"
+            className="bg-white border-2 border-blue-200 text-blue-950 font-bold text-xs sm:text-sm rounded-xl px-3 py-2.5 outline-none w-full md:w-56"
           >
             <option value="ALL">All Payment Modes</option>
             {PAYMENT_MODES.map(mode => (
