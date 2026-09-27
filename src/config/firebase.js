@@ -1,24 +1,23 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getDatabase, ref, onValue, set, remove, get } from 'firebase/database';
 
-// Configuration can be loaded from Vite environment variables (for Vercel deployment)
-// or fallback placeholders.
+// Primary Firebase Configuration for Escape Time (Madhapur Branch)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "YOUR_MADHAPUR_API_KEY",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "YOUR_MADHAPUR_AUTH_DOMAIN",
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "YOUR_MADHAPUR_FIREBASE_DATABASE_URL_HERE",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "YOUR_MADHAPUR_PROJECT_ID",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "YOUR_MADHAPUR_STORAGE_BUCKET",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "YOUR_MADHAPUR_SENDER_ID",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "YOUR_MADHAPUR_APP_ID"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDYDQWQSw-eyEUcVfwTddw3MmEdisqnNEc",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "sales-crm-madhapur.firebaseapp.com",
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://sales-crm-madhapur-default-rtdb.firebaseio.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "sales-crm-madhapur",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "sales-crm-madhapur.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "13548032124",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:13548032124:web:338573729fe9e6d82579f9",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-MKQYY5SPDR"
 };
 
 export const isFirebaseConfigured = () => {
   return (
     firebaseConfig.apiKey &&
-    !firebaseConfig.apiKey.includes("YOUR_MADHAPUR") &&
-    firebaseConfig.databaseURL &&
-    !firebaseConfig.databaseURL.includes("YOUR_MADHAPUR")
+    !firebaseConfig.apiKey.includes("YOUR_") &&
+    firebaseConfig.projectId === "sales-crm-madhapur"
   );
 };
 
@@ -30,7 +29,7 @@ if (isFirebaseConfigured()) {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
     rtdb = getDatabase(app);
   } catch (err) {
-    console.warn("Firebase initialization warning:", err);
+    console.warn("Firebase initialization notice:", err);
   }
 }
 
@@ -44,7 +43,7 @@ export const BOOKINGS_PATH = 'madhapur/bookings';
  */
 export const saveBookingToFirebase = async (booking) => {
   if (!rtdb) {
-    console.info("Firebase not configured yet; saved locally.");
+    console.info("Firebase RTDB not initialized; persisted locally in browser.");
     return false;
   }
   try {
@@ -52,7 +51,7 @@ export const saveBookingToFirebase = async (booking) => {
     await set(bookingRef, booking);
     return true;
   } catch (error) {
-    console.error("Error saving booking to Firebase:", error);
+    console.error("Error saving booking to Firebase Realtime Database:", error);
     throw error;
   }
 };
@@ -62,7 +61,7 @@ export const saveBookingToFirebase = async (booking) => {
  */
 export const deleteBookingFromFirebase = async (bookingId) => {
   if (!rtdb) {
-    console.info("Firebase not configured yet; deleted locally.");
+    console.info("Firebase RTDB not initialized; deleted locally in browser.");
     return false;
   }
   try {
@@ -70,7 +69,7 @@ export const deleteBookingFromFirebase = async (bookingId) => {
     await remove(bookingRef);
     return true;
   } catch (error) {
-    console.error("Error deleting booking from Firebase:", error);
+    console.error("Error deleting booking from Firebase Realtime Database:", error);
     throw error;
   }
 };
