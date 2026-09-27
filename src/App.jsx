@@ -12,6 +12,7 @@ import {
   onValue,
   saveBookingToFirebase,
   deleteBookingFromFirebase,
+  fetchBookingsFromREST,
   isFirebaseConfigured,
   BOOKINGS_PATH
 } from './config/firebase';
@@ -145,9 +146,9 @@ export default function App() {
   const [bookings, setBookings] = useState(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {
       console.warn("Could not load from localStorage:", e);
@@ -176,8 +177,19 @@ export default function App() {
     }
   }, [bookings]);
 
-  // Firebase Realtime Listener
+  // Firebase Realtime Listener & Initial Sync
   useEffect(() => {
+    let isMounted = true;
+
+    // 1. Initial REST fetch for instant guaranteed synchronization
+    fetchBookingsFromREST().then(list => {
+      if (isMounted && list !== null) {
+        setBookings(list);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
+      }
+    });
+
+    // 2. Realtime WebSocket listener
     if (!isFirebaseConfigured() || !rtdb) {
       setIsFirebaseActive(false);
       return;
@@ -193,19 +205,25 @@ export default function App() {
         setIsSyncing(false);
         if (snapshot.exists()) {
           const val = snapshot.val();
-          const list = Object.values(val);
-          if (Array.isArray(list) && list.length > 0) {
+          if (val) {
+            const list = Object.values(val);
             setBookings(list);
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
           }
+        } else {
+          // Database has been emptied - respect empty list!
+          setBookings([]);
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([]));
         }
       },
       (error) => {
-        console.error("Firebase Realtime Database error:", error);
+        console.warn("Firebase Realtime Database listener notice:", error);
         setIsSyncing(false);
       }
     );
 
     return () => {
+      isMounted = false;
       unsubscribe();
     };
   }, []);
@@ -244,52 +262,54 @@ export default function App() {
     setIsDetailModalOpen(true);
   };
 
-  // OPTIMISTIC SAVE / UPDATE (0ms Instant Latency)
+  // OPTIMISTIC SAVE / UPDATE (0ms Instant Latency + Background Dual Cloud Sync)
   const handleSaveBooking = useCallback(async (bookingData) => {
     // 1. Instant 0ms Local React State Update
     setBookings(prev => {
       const idx = prev.findIndex(b => b.id === bookingData.id);
+      let next;
       if (idx >= 0) {
-        const next = [...prev];
+        next = [...prev];
         next[idx] = bookingData;
-        return next;
       } else {
-        return [bookingData, ...prev];
+        next = [bookingData, ...prev];
       }
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
+      return next;
     });
 
-    // 2. Background Cloud Sync to Firebase
-    if (isFirebaseConfigured() && rtdb) {
-      try {
-        setIsSyncing(true);
-        await saveBookingToFirebase(bookingData);
-      } catch (err) {
-        console.error("Background sync failed for booking:", err);
-      } finally {
-        setIsSyncing(false);
-      }
+    // 2. Background Cloud Sync to Firebase (SDK + REST Fallback)
+    try {
+      setIsSyncing(true);
+      await saveBookingToFirebase(bookingData);
+    } catch (err) {
+      console.warn("Background sync notice:", err);
+    } finally {
+      setIsSyncing(false);
     }
   }, []);
 
-  // OPTIMISTIC DELETE (0ms Instant Latency)
+  // OPTIMISTIC DELETE (0ms Instant Latency + Background Dual Cloud Sync)
   const handleDeleteBooking = useCallback(async (bookingId) => {
     if (!window.confirm("Are you sure you want to delete this booking entry?")) {
       return;
     }
 
     // 1. Instant 0ms Local React State Update
-    setBookings(prev => prev.filter(b => b.id !== bookingId));
+    setBookings(prev => {
+      const next = prev.filter(b => b.id !== bookingId);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
 
-    // 2. Background Cloud Sync to Firebase
-    if (isFirebaseConfigured() && rtdb) {
-      try {
-        setIsSyncing(true);
-        await deleteBookingFromFirebase(bookingId);
-      } catch (err) {
-        console.error("Background deletion failed for booking:", err);
-      } finally {
-        setIsSyncing(false);
-      }
+    // 2. Background Cloud Sync to Firebase (SDK + REST Fallback)
+    try {
+      setIsSyncing(true);
+      await deleteBookingFromFirebase(bookingId);
+    } catch (err) {
+      console.warn("Background deletion notice:", err);
+    } finally {
+      setIsSyncing(false);
     }
   }, []);
 
