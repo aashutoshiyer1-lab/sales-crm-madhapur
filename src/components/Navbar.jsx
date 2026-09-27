@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, BarChart3, PlusCircle, ShieldCheck, Cloud, CloudOff, RefreshCw } from 'lucide-react';
+import { Calendar, BarChart3, MessageSquare, PlusCircle, ShieldCheck, Cloud, CloudOff, RefreshCw } from 'lucide-react';
 import { BRANCH_INFO } from '../config/venueData';
 
 export default function Navbar({
@@ -53,12 +53,24 @@ export default function Navbar({
               onClick={() => setCurrentView('sales')}
               className={`flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-black transition-all ${
                 currentView === 'sales'
-                  ? 'bg-slate-950 text-white shadow-sm'
+                  ? 'bg-blue-600 text-white shadow-sm'
                   : 'text-slate-700 hover:text-slate-950 hover:bg-white/60'
               }`}
             >
-              <BarChart3 className="w-4 h-4 text-red-400" />
+              <BarChart3 className="w-4 h-4 text-amber-400" />
               <span>Sales & Reports</span>
+            </button>
+
+            <button
+              onClick={() => setCurrentView('closing')}
+              className={`flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-black transition-all ${
+                currentView === 'closing'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-700 hover:text-slate-950 hover:bg-white/60'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4 text-emerald-400" />
+              <span>Closing Message</span>
             </button>
           </div>
 

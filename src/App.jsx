@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Navbar from './components/Navbar';
 import CalendarDashboard from './components/CalendarDashboard';
 import SalesDashboard from './components/SalesDashboard';
+import ClosingMessageGenerator from './components/ClosingMessageGenerator';
 import BookingModal from './components/BookingModal';
 import BookingDetailModal from './components/BookingDetailModal';
 import LoginView from './components/LoginView';
@@ -312,7 +313,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 pb-16">
-        {currentView === 'calendar' ? (
+        {currentView === 'calendar' && (
           <CalendarDashboard
             bookings={bookings}
             selectedDate={selectedDate}
@@ -321,12 +322,20 @@ export default function App() {
             onOpenDetailModal={handleOpenDetail}
             onDeleteBooking={handleDeleteBooking}
           />
-        ) : (
+        )}
+        {currentView === 'sales' && (
           <SalesDashboard
             bookings={bookings}
             onOpenBookingModal={handleOpenEditBooking}
             onOpenDetailModal={handleOpenDetail}
             onDeleteBooking={handleDeleteBooking}
+          />
+        )}
+        {currentView === 'closing' && (
+          <ClosingMessageGenerator
+            bookings={bookings}
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
           />
         )}
       </main>
