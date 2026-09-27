@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
   Calendar,
@@ -15,7 +15,8 @@ import {
   Users,
   Plus,
   Minus,
-  Sparkles
+  ChevronDown,
+  Check
 } from 'lucide-react';
 import {
   GAMES,
@@ -26,6 +27,77 @@ import {
   isWeekend
 } from '../config/venueData';
 import { calculatePricing, formatCurrency, getPaidTotal } from '../utils/pricingEngine';
+
+/**
+ * Custom Dropdown Component to completely avoid Windows / browser native gray highlight
+ */
+function CustomDropdown({ label, value, options, onChange, icon: Icon, placeholder = "Select option" }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  const selectedOption = options.find(o => o.value === value) || options[0];
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      {label && (
+        <label className="block text-xs font-black text-blue-950 mb-1">
+          {label}
+        </label>
+      )}
+
+      {/* Dropdown Trigger Bar - Pure White with Blue Border */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(prev => !prev)}
+        className="w-full flex items-center justify-between bg-white border-2 border-blue-300 hover:border-blue-600 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 rounded-xl px-3 py-2.5 transition text-left cursor-pointer shadow-xs"
+      >
+        <div className="flex items-center space-x-2 truncate pr-2">
+          {Icon && <Icon className="w-4 h-4 text-blue-600 shrink-0" />}
+          <span className="font-black font-mono text-slate-950 text-sm truncate">
+            {selectedOption ? selectedOption.label : placeholder}
+          </span>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-blue-600 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-700' : ''}`} />
+      </button>
+
+      {/* Dropdown Options Popup - Pure White with Vivid Blue Hover */}
+      {isOpen && (
+        <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border-2 border-blue-500 rounded-2xl shadow-2xl max-h-64 overflow-y-auto p-1.5 space-y-1 animate-fadeIn">
+          {options.map((opt) => {
+            const isSelected = opt.value === value;
+            return (
+              <div
+                key={opt.value}
+                onClick={() => {
+                  onChange(opt.value);
+                  setIsOpen(false);
+                }}
+                className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm font-black cursor-pointer transition-colors duration-150 ${
+                  isSelected
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-900 hover:bg-blue-600 hover:text-white'
+                }`}
+              >
+                <span className="truncate">{opt.label}</span>
+                {isSelected && <Check className="w-4 h-4 text-white shrink-0 ml-2" />}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function BookingModal({
   isOpen,
@@ -59,7 +131,7 @@ export default function BookingModal({
     bookingToEdit?.gameName || GAMES[0].name
   );
 
-  // Manual player count entry
+  // Manual player count entry (No quick pill list, staff types manually or uses +/-)
   const [players, setPlayers] = useState(bookingToEdit?.players || 4);
   const [offerId, setOfferId] = useState(bookingToEdit?.offerId || 'none');
 
@@ -89,7 +161,7 @@ export default function BookingModal({
     return initial;
   });
 
-  // Determine which tier is active based on players count
+  // Determine active tier automatically
   const activeTier = useMemo(() => {
     const count = Number(players) || 1;
     if (count <= 3) return '2-3';
@@ -159,11 +231,22 @@ export default function BookingModal({
     setPayments(empty);
   };
 
-  // Adjust player count with buttons
+  // Plus / Minus adjustments
   const handlePlayerAdjust = (delta) => {
     const current = Number(players) || 2;
     const next = Math.max(1, current + delta);
     setPlayers(next);
+  };
+
+  // Quick Date Jump
+  const handleShiftDate = (days) => {
+    const d = new Date(date + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    setDate(d.toISOString().split('T')[0]);
+  };
+
+  const handleSetToday = () => {
+    setDate(new Date().toISOString().split('T')[0]);
   };
 
   // Submit Handler
@@ -177,7 +260,6 @@ export default function BookingModal({
 
     const selectedOfferObj = OFFERS.find(o => o.id === offerId);
 
-    // Compute final reference value
     let finalReference = '';
     if (refType === 'Khaja Sir') {
       finalReference = 'Khaja Sir';
@@ -221,6 +303,25 @@ export default function BookingModal({
     onClose();
   };
 
+  // Options for custom dropdowns
+  const slotOptions = useMemo(() => {
+    return availableSlots.map(s => ({ value: s, label: s }));
+  }, [availableSlots]);
+
+  const gameOptions = useMemo(() => {
+    return GAMES.map(g => ({ value: g.name, label: `${g.name} (60m)` }));
+  }, []);
+
+  const offerOptions = useMemo(() => {
+    return OFFERS.map(o => ({ value: o.id, label: o.name }));
+  }, []);
+
+  const refOptions = [
+    { value: 'none', label: 'None (Standard Rate)' },
+    { value: 'Khaja Sir', label: 'Khaja Sir' },
+    { value: 'custom', label: '+ Specific / Other Custom Name' }
+  ];
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
       {/* Pure White Dialog Box with Crisp Blue Accents */}
@@ -253,7 +354,7 @@ export default function BookingModal({
         {/* Modal Body - Pure White Dialog Form */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 flex-1 text-slate-900 bg-white">
 
-          {/* STEP 1: CUSTOMER CONTACT INFORMATION (FIRST) - Pure White Inputs */}
+          {/* STEP 1: CUSTOMER CONTACT INFORMATION (FIRST) */}
           <div className="bg-white p-5 rounded-2xl border-2 border-blue-300 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b-2 border-blue-100 pb-2.5">
               <h3 className="text-xs font-black uppercase text-blue-900 tracking-wider flex items-center space-x-2">
@@ -261,7 +362,7 @@ export default function BookingModal({
                 <span>Customer Contact Information</span>
               </h3>
               <span className="text-[11px] font-black text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
-                Contact Details
+                Primary Contact
               </span>
             </div>
 
@@ -271,7 +372,7 @@ export default function BookingModal({
                 <label className="block text-xs font-black text-blue-950 mb-1">
                   Customer Name *
                 </label>
-                <div className="flex items-center space-x-2 bg-white border-2 border-blue-200 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 rounded-xl px-3 py-2.5 transition">
+                <div className="flex items-center space-x-2 bg-white border-2 border-blue-300 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 rounded-xl px-3 py-2.5 transition">
                   <User className="w-4 h-4 text-blue-600 shrink-0" />
                   <input
                     type="text"
@@ -289,7 +390,7 @@ export default function BookingModal({
                 <label className="block text-xs font-black text-blue-950 mb-1">
                   Phone Number *
                 </label>
-                <div className="flex items-center space-x-2 bg-white border-2 border-blue-200 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 rounded-xl px-3 py-2.5 transition">
+                <div className="flex items-center space-x-2 bg-white border-2 border-blue-300 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 rounded-xl px-3 py-2.5 transition">
                   <Phone className="w-4 h-4 text-blue-600 shrink-0" />
                   <input
                     type="tel"
@@ -307,7 +408,7 @@ export default function BookingModal({
                 <label className="block text-xs font-black text-blue-950 mb-1">
                   Booking Notes / Tags
                 </label>
-                <div className="flex items-center space-x-2 bg-white border-2 border-blue-200 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 rounded-xl px-3 py-2.5 transition">
+                <div className="flex items-center space-x-2 bg-white border-2 border-blue-300 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 rounded-xl px-3 py-2.5 transition">
                   <input
                     type="text"
                     placeholder="e.g. Birthday, corporate group"
@@ -320,7 +421,7 @@ export default function BookingModal({
             </div>
           </div>
 
-          {/* STEP 2: BOOKING DATE & TIME (NEXT TO IT) - Pure White Inputs */}
+          {/* STEP 2: BOOKING DATE & TIME (CUSTOM BLUE DROPDOWN - NO GRAY SELECTION) */}
           <div className="bg-white p-5 rounded-2xl border-2 border-blue-300 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b-2 border-blue-100 pb-2.5">
               <h3 className="text-xs font-black uppercase text-blue-900 tracking-wider flex items-center space-x-2">
@@ -337,45 +438,55 @@ export default function BookingModal({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Date Input - Pure White Box */}
+              {/* Date Input with Quick Navigation Controls */}
               <div>
                 <label className="block text-xs font-black text-blue-950 mb-1">
                   Which Date is Customer Booking?
                 </label>
-                <div className="flex items-center space-x-2 bg-white border-2 border-blue-200 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 rounded-xl px-3 py-2.5 transition">
-                  <Calendar className="w-4 h-4 text-blue-600 shrink-0" />
-                  <input
-                    type="date"
-                    required
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="bg-white font-black font-mono text-slate-950 outline-none w-full text-sm cursor-pointer"
-                  />
+                <div className="flex items-center space-x-2">
+                  <div className="flex-1 flex items-center space-x-2 bg-white border-2 border-blue-300 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 rounded-xl px-3 py-2 transition">
+                    <Calendar className="w-4 h-4 text-blue-600 shrink-0" />
+                    <input
+                      type="date"
+                      required
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="bg-white font-black font-mono text-slate-950 outline-none w-full text-sm cursor-pointer accent-blue-600"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSetToday}
+                    className="px-2.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl transition shadow-xs"
+                    title="Set to Today"
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleShiftDate(1)}
+                    className="px-2.5 py-2.5 bg-blue-100 hover:bg-blue-200 text-blue-900 text-xs font-black rounded-xl transition"
+                    title="Next Day"
+                  >
+                    +1D
+                  </button>
                 </div>
               </div>
 
-              {/* Time Slot (12-Hour AM/PM) - Pure White Box */}
+              {/* Custom Blue Time Slot Dropdown (Zero Gray Hover!) */}
               <div>
-                <label className="block text-xs font-black text-blue-950 mb-1">
-                  15-Minute Time Slot (12-Hour Format)
-                </label>
-                <div className="flex items-center space-x-2 bg-white border-2 border-blue-200 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 rounded-xl px-3 py-2.5 transition">
-                  <Clock className="w-4 h-4 text-blue-600 shrink-0" />
-                  <select
-                    value={timeSlot}
-                    onChange={(e) => setTimeSlot(e.target.value)}
-                    className="bg-white font-black font-mono text-slate-950 outline-none w-full text-sm cursor-pointer"
-                  >
-                    {availableSlots.map(slot => (
-                      <option key={slot} value={slot}>{slot}</option>
-                    ))}
-                  </select>
-                </div>
+                <CustomDropdown
+                  label="15-Minute Time Slot (12-Hour Format)"
+                  value={timeSlot}
+                  options={slotOptions}
+                  onChange={(val) => setTimeSlot(val)}
+                  icon={Clock}
+                />
               </div>
             </div>
           </div>
 
-          {/* STEP 3: PLAYERS (MANUAL ENTRY + AUTO TIER SELECTION), GAME & OFFERS */}
+          {/* STEP 3: PLAYERS (MANUAL ENTRY ONLY + AUTO TIER SELECTION), GAME & OFFERS */}
           <div className="bg-white p-5 rounded-2xl border-2 border-blue-300 shadow-sm space-y-5">
             <div className="flex items-center justify-between border-b-2 border-blue-100 pb-2.5">
               <h3 className="text-xs font-black uppercase text-blue-900 tracking-wider flex items-center space-x-2">
@@ -387,89 +498,77 @@ export default function BookingModal({
               </span>
             </div>
 
-            {/* Manual Player Entry Bar + Auto Tier Indicator */}
+            {/* Manual Player Entry Bar + 3 Auto-Selected Tiers */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
               
-              {/* Manual Player Count Input (Left 4 cols) */}
-              <div className="md:col-span-5 bg-white p-3.5 rounded-2xl border-2 border-blue-200">
-                <label className="block text-xs font-black text-blue-950 mb-1.5">
+              {/* Manual Player Input (No up/down arrows, no accidental scroll jump, staff types directly or uses +/-) */}
+              <div className="md:col-span-5 bg-white p-4 rounded-2xl border-2 border-blue-300">
+                <label className="block text-xs font-black text-blue-950 mb-2">
                   Enter Number of Players Manually:
                 </label>
                 <div className="flex items-center space-x-2">
                   <button
                     type="button"
                     onClick={() => handlePlayerAdjust(-1)}
-                    className="w-10 h-10 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-900 flex items-center justify-center font-black active:scale-95 transition"
+                    className="w-12 h-12 rounded-xl bg-blue-100 hover:bg-blue-600 hover:text-white border-2 border-blue-300 text-blue-900 flex items-center justify-center font-black active:scale-95 transition shadow-xs"
+                    title="Minus 1 Player"
                   >
-                    <Minus className="w-4 h-4" />
+                    <Minus className="w-5 h-5" />
                   </button>
 
-                  <div className="flex-1 flex items-center justify-center bg-white border-2 border-blue-300 rounded-xl h-10 px-3">
-                    <Users className="w-4 h-4 text-blue-600 mr-2 shrink-0" />
+                  <div className="flex-1 flex items-center justify-center bg-white border-2 border-blue-400 focus-within:border-blue-600 rounded-xl h-12 px-3">
+                    <Users className="w-5 h-5 text-blue-600 mr-2 shrink-0" />
                     <input
                       type="number"
                       min="1"
-                      max="30"
+                      max="40"
                       required
                       value={players}
-                      onChange={(e) => setPlayers(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                      className="w-full text-center font-black font-mono text-lg text-slate-950 outline-none bg-white"
+                      onWheel={(e) => e.target.blur()} // Prevents accidental mouse scroll jump!
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setPlayers(isNaN(val) ? '' : Math.max(1, val));
+                      }}
+                      className="w-full text-center font-black font-mono text-xl text-slate-950 outline-none bg-white"
+                      placeholder="e.g. 4"
                     />
-                    <span className="text-xs font-bold text-blue-900 ml-1">Players</span>
+                    <span className="text-xs font-black text-blue-950 ml-1">Players</span>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => handlePlayerAdjust(1)}
-                    className="w-10 h-10 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-900 flex items-center justify-center font-black active:scale-95 transition"
+                    className="w-12 h-12 rounded-xl bg-blue-100 hover:bg-blue-600 hover:text-white border-2 border-blue-300 text-blue-900 flex items-center justify-center font-black active:scale-95 transition shadow-xs"
+                    title="Plus 1 Player"
                   >
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-5 h-5" />
                   </button>
-                </div>
-
-                {/* Quick Presets */}
-                <div className="flex items-center space-x-1.5 mt-2 pt-2 border-t border-blue-100">
-                  <span className="text-[10px] font-bold text-slate-500">Quick:</span>
-                  {[2, 3, 4, 5, 6, 7, 8, 10].map(num => (
-                    <button
-                      key={num}
-                      type="button"
-                      onClick={() => setPlayers(num)}
-                      className={`px-2 py-0.5 rounded-md text-xs font-black transition ${
-                        Number(players) === num
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white border border-blue-200 text-blue-900 hover:bg-blue-50'
-                      }`}
-                    >
-                      {num}
-                    </button>
-                  ))}
                 </div>
               </div>
 
-              {/* 3 Auto-Selected Tier Cards (Right 7 cols) */}
+              {/* 3 Auto-Detected Pricing Tiers - Automatically Lights Up in Bright Blue */}
               <div className="md:col-span-7 grid grid-cols-3 gap-2">
                 {/* Tier 1: 2-3 Players */}
                 <div
                   onClick={() => setPlayers(2)}
                   className={`p-3 rounded-2xl border-2 transition-all cursor-pointer ${
                     activeTier === '2-3'
-                      ? 'bg-blue-50/80 border-blue-600 ring-2 ring-blue-500/30 shadow-md'
-                      : 'bg-white border-blue-100 hover:border-blue-300'
+                      ? 'bg-blue-600 text-white border-blue-700 shadow-md ring-2 ring-blue-400/50'
+                      : 'bg-white text-slate-900 border-blue-200 hover:border-blue-400'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-950">2–3 Players</span>
+                    <span className={`text-xs font-black ${activeTier === '2-3' ? 'text-white' : 'text-slate-950'}`}>2–3 Players</span>
                     {activeTier === '2-3' && (
-                      <span className="text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.2 rounded">
+                      <span className="text-[9px] font-black bg-white text-blue-900 px-1.5 py-0.2 rounded shadow-xs">
                         ✓ ACTIVE
                       </span>
                     )}
                   </div>
-                  <p className="text-base font-black font-mono text-blue-950 mt-1">
+                  <p className={`text-base font-black font-mono mt-1 ${activeTier === '2-3' ? 'text-white' : 'text-blue-950'}`}>
                     {weekendStatus ? '₹1,099' : '₹999'}
                   </p>
-                  <span className="text-[10px] font-bold text-blue-700">per player</span>
+                  <span className={`text-[10px] font-bold ${activeTier === '2-3' ? 'text-blue-100' : 'text-blue-700'}`}>per player</span>
                 </div>
 
                 {/* Tier 2: 4-6 Players */}
@@ -477,22 +576,22 @@ export default function BookingModal({
                   onClick={() => setPlayers(4)}
                   className={`p-3 rounded-2xl border-2 transition-all cursor-pointer ${
                     activeTier === '4-6'
-                      ? 'bg-blue-50/80 border-blue-600 ring-2 ring-blue-500/30 shadow-md'
-                      : 'bg-white border-blue-100 hover:border-blue-300'
+                      ? 'bg-blue-600 text-white border-blue-700 shadow-md ring-2 ring-blue-400/50'
+                      : 'bg-white text-slate-900 border-blue-200 hover:border-blue-400'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-950">4–6 Players</span>
+                    <span className={`text-xs font-black ${activeTier === '4-6' ? 'text-white' : 'text-slate-950'}`}>4–6 Players</span>
                     {activeTier === '4-6' && (
-                      <span className="text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.2 rounded">
+                      <span className="text-[9px] font-black bg-white text-blue-900 px-1.5 py-0.2 rounded shadow-xs">
                         ✓ ACTIVE
                       </span>
                     )}
                   </div>
-                  <p className="text-base font-black font-mono text-blue-950 mt-1">
+                  <p className={`text-base font-black font-mono mt-1 ${activeTier === '4-6' ? 'text-white' : 'text-blue-950'}`}>
                     {weekendStatus ? '₹999' : '₹899'}
                   </p>
-                  <span className="text-[10px] font-bold text-blue-700">per player</span>
+                  <span className={`text-[10px] font-bold ${activeTier === '4-6' ? 'text-blue-100' : 'text-blue-700'}`}>per player</span>
                 </div>
 
                 {/* Tier 3: 7+ Players */}
@@ -500,100 +599,73 @@ export default function BookingModal({
                   onClick={() => setPlayers(7)}
                   className={`p-3 rounded-2xl border-2 transition-all cursor-pointer ${
                     activeTier === '7+'
-                      ? 'bg-blue-50/80 border-blue-600 ring-2 ring-blue-500/30 shadow-md'
-                      : 'bg-white border-blue-100 hover:border-blue-300'
+                      ? 'bg-blue-600 text-white border-blue-700 shadow-md ring-2 ring-blue-400/50'
+                      : 'bg-white text-slate-900 border-blue-200 hover:border-blue-400'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-950">7+ Players</span>
+                    <span className={`text-xs font-black ${activeTier === '7+' ? 'text-white' : 'text-slate-950'}`}>7+ Players</span>
                     {activeTier === '7+' && (
-                      <span className="text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.2 rounded">
+                      <span className="text-[9px] font-black bg-white text-blue-900 px-1.5 py-0.2 rounded shadow-xs">
                         ✓ ACTIVE
                       </span>
                     )}
                   </div>
-                  <p className="text-base font-black font-mono text-blue-950 mt-1">
+                  <p className={`text-base font-black font-mono mt-1 ${activeTier === '7+' ? 'text-white' : 'text-blue-950'}`}>
                     {weekendStatus ? '₹899' : '₹799'}
                   </p>
-                  <span className="text-[10px] font-bold text-blue-700">per player</span>
+                  <span className={`text-[10px] font-bold ${activeTier === '7+' ? 'text-blue-100' : 'text-blue-700'}`}>per player</span>
                 </div>
               </div>
 
             </div>
 
-            {/* Game, Offer / Deal & Reference Row - Pure White Dropdowns */}
+            {/* Custom Blue Dropdowns for Game, Deal / Discount & Reference */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t-2 border-blue-100">
-              {/* Game Selection */}
+              {/* Game Custom Dropdown */}
               <div>
-                <label className="block text-xs font-black text-blue-950 mb-1">
-                  Escape Room Game
-                </label>
-                <div className="bg-white border-2 border-blue-200 focus-within:border-blue-600 rounded-xl px-3 py-2 transition">
-                  <select
-                    value={gameName}
-                    onChange={(e) => setGameName(e.target.value)}
-                    className="w-full bg-white text-xs sm:text-sm font-black text-slate-950 outline-none cursor-pointer"
-                  >
-                    {GAMES.map(g => (
-                      <option key={g.id} value={g.name}>
-                        {g.name} (60m)
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <CustomDropdown
+                  label="Escape Room Game"
+                  value={gameName}
+                  options={gameOptions}
+                  onChange={(val) => setGameName(val)}
+                  icon={Tag}
+                />
               </div>
 
-              {/* Deal / Offers & Discounts - Pure White Box */}
+              {/* Deal / Offer Custom Dropdown */}
               <div>
-                <label className="block text-xs font-black text-blue-950 mb-1">
-                  Deal / Discount Offer
-                </label>
-                <div className="bg-white border-2 border-blue-200 focus-within:border-blue-600 rounded-xl px-3 py-2 transition">
-                  <select
-                    value={offerId}
-                    onChange={(e) => setOfferId(e.target.value)}
-                    className="w-full bg-white text-xs sm:text-sm font-black text-slate-950 outline-none cursor-pointer"
-                  >
-                    {OFFERS.map(o => (
-                      <option key={o.id} value={o.id}>
-                        {o.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <CustomDropdown
+                  label="Deal / Discount Offer"
+                  value={offerId}
+                  options={offerOptions}
+                  onChange={(val) => setOfferId(val)}
+                  icon={Tag}
+                />
               </div>
 
-              {/* Approval Reference - Pure White Box */}
+              {/* Approval Reference Custom Dropdown */}
               <div>
-                <label className="block text-xs font-black text-blue-950 mb-1">
-                  Approval Reference
-                </label>
-                <div className="bg-white border-2 border-blue-200 focus-within:border-blue-600 rounded-xl px-3 py-2 transition">
-                  <select
-                    value={refType}
-                    onChange={(e) => {
-                      setRefType(e.target.value);
-                      if (e.target.value !== 'custom') {
-                        setCustomRefName('');
-                      }
-                    }}
-                    className="w-full bg-white text-xs sm:text-sm font-black text-slate-950 outline-none cursor-pointer"
-                  >
-                    <option value="none">None (Standard Rate)</option>
-                    <option value="Khaja Sir">Khaja Sir</option>
-                    <option value="custom">+ Specific / Other Custom Name</option>
-                  </select>
-                </div>
+                <CustomDropdown
+                  label="Approval Reference"
+                  value={refType}
+                  options={refOptions}
+                  onChange={(val) => {
+                    setRefType(val);
+                    if (val !== 'custom') setCustomRefName('');
+                  }}
+                  icon={UserCheck}
+                />
               </div>
             </div>
 
             {/* Custom Reference Name Input if selected */}
             {refType === 'custom' && (
-              <div className="p-3 bg-white rounded-xl border-2 border-blue-400 animate-fadeIn">
+              <div className="p-3 bg-white rounded-xl border-2 border-blue-500 animate-fadeIn">
                 <label className="block text-xs font-black text-blue-950 mb-1">
                   Enter Specific Reference Name:
                 </label>
-                <div className="flex items-center space-x-2 bg-white border-2 border-blue-300 rounded-lg px-3 py-2">
+                <div className="flex items-center space-x-2 bg-white border-2 border-blue-300 focus-within:border-blue-600 rounded-lg px-3 py-2">
                   <UserCheck className="w-4 h-4 text-blue-600 shrink-0" />
                   <input
                     type="text"
@@ -607,7 +679,7 @@ export default function BookingModal({
               </div>
             )}
 
-            {/* Live Pricing Breakdown Card - Clean Crisp Card */}
+            {/* Live Pricing Breakdown Card */}
             <div className="bg-blue-50/70 p-4 rounded-2xl border-2 border-blue-300 grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
                 <span className="text-[11px] font-black text-blue-900 block">Rate / Player</span>
@@ -621,7 +693,7 @@ export default function BookingModal({
                 <span className="text-base font-black font-mono text-slate-950">
                   {formatCurrency(pricing.baseTotal)}
                 </span>
-                <span className="text-[10px] text-slate-500 block mt-0.5">{players} × ₹{pricing.ratePerPlayer}</span>
+                <span className="text-[10px] text-slate-500 block mt-0.5">{players || 0} × ₹{pricing.ratePerPlayer}</span>
               </div>
               <div>
                 <span className="text-[11px] font-black text-blue-900 block">
@@ -641,7 +713,7 @@ export default function BookingModal({
             </div>
           </div>
 
-          {/* STEP 4: PAYMENT MODES & SPLIT COLLECTION - Pure White Input Boxes */}
+          {/* STEP 4: PAYMENT MODES & SPLIT COLLECTION */}
           <div className="bg-white p-5 rounded-2xl border-2 border-blue-300 shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b-2 border-blue-100 pb-2.5">
               <h3 className="text-xs font-black uppercase text-blue-900 tracking-wider flex items-center space-x-2">
@@ -673,7 +745,7 @@ export default function BookingModal({
               </div>
             </div>
 
-            {/* Split Payment Rows for 6 Modes - Pure White Boxes */}
+            {/* Split Payment Rows for 6 Modes - Pure White Boxes with Solid Blue Fill Buttons */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {PAYMENT_MODES.map((mode) => {
                 const isScreenshotReq = MODES_REQUIRING_SCREENSHOT.includes(mode);
@@ -709,6 +781,7 @@ export default function BookingModal({
                         min="0"
                         placeholder="0"
                         value={currentVal}
+                        onWheel={(e) => e.target.blur()}
                         onChange={(e) => handlePaymentChange(mode, e.target.value)}
                         className="w-full bg-white font-black font-mono text-sm text-slate-950 outline-none"
                       />

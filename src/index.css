@@ -7,29 +7,46 @@
     background-color: #fffff0;
     color: #0f172a;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    accent-color: #2563eb; /* Vibrant Blue accent for all native controls */
+  }
+
+  /* Disable annoying accidental number spinners and scroll wheel jump */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  /* Ensure calendar picker accent is blue */
+  ::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    filter: invert(36%) sepia(87%) saturate(1983%) hue-rotate(206deg) brightness(97%) contrast(96%);
   }
 }
 
-/* Custom Scrollbar for smooth modern feel */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #fdfbf0;
+  background: #eff6ff;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #93c5fd;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #3b82f6;
 }
 
-/* Print Styles for Printable Receipt */
+/* Print Styles */
 @media print {
   body * {
     visibility: hidden;
