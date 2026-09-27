@@ -91,7 +91,7 @@ const getInitialSampleBookings = () => {
       customerName: "Ananya Iyer",
       customerPhone: "9988776655",
       notes: "District voucher booking",
-      reference: "Nayeem Sir",
+      reference: "Khaja Sir",
       payments: {
         "Prepaid by District": 2997
       },
@@ -116,7 +116,7 @@ const getInitialSampleBookings = () => {
       customerName: "Karthik Verma",
       customerPhone: "9848012345",
       notes: "Collect cash upon arrival",
-      reference: "Manager Reference",
+      reference: "Corporate Reference",
       payments: {
         "Cash": 1000
       },

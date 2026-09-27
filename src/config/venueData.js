@@ -35,9 +35,7 @@ export const OFFERS = [
 ];
 
 export const APPROVAL_REFERENCES = [
-  "Nayeem Sir",
-  "Khaja Sir",
-  "Manager Reference"
+  "Khaja Sir"
 ];
 
 export const GAMES = [
@@ -102,6 +100,21 @@ export const formatTime12h = (hour, minute) => {
   const displayHour = hour % 12 === 0 ? 12 : hour % 12;
   const displayMin = minute.toString().padStart(2, '0');
   return `${displayHour}:${displayMin} ${period}`;
+};
+
+/**
+ * Convert 12-hour string (e.g. "11:15 AM", "02:30 PM") into 24-hour format ("11:15", "14:30")
+ * Specially needed for Sales & Reports physical ledger logging!
+ */
+export const formatTime24h = (time12h) => {
+  if (!time12h) return '';
+  const match = time12h.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return time12h;
+  let [, h, m, period] = match;
+  let hour = parseInt(h, 10);
+  if (period.toUpperCase() === 'PM' && hour !== 12) hour += 12;
+  if (period.toUpperCase() === 'AM' && hour === 12) hour = 0;
+  return `${hour.toString().padStart(2, '0')}:${m}`;
 };
 
 /**
