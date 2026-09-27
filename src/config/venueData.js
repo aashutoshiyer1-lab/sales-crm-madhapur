@@ -40,8 +40,11 @@ export const APPROVAL_REFERENCES = [
 
 // Active staff members for Madhapur branch (closing & mummy actor tracking)
 export const STAFF_ROSTER = [
+  "Moin",
+  "Hamza",
+  "Prudhvi",
   "Bhavani",
-  "Prudhvi"
+  "Harshini"
 ];
 
 /**
