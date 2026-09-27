@@ -23,6 +23,7 @@ import {
   MODES_REQUIRING_SCREENSHOT,
   parseTimeToMinutes,
   formatTime24h,
+  getPlayerCategory,
   BRANCH_INFO
 } from '../config/venueData';
 import { formatCurrency, getPaidTotal } from '../utils/pricingEngine';
@@ -222,6 +223,7 @@ export default function SalesDashboard({
       'Time Slot (24H Format)',
       'Game Name',
       'Players',
+      'Player Category',
       'Customer Name',
       'Customer Phone',
       'Rate Per Player (₹)',
@@ -255,6 +257,7 @@ export default function SalesDashboard({
         `"${time24}"`,
         `"${b.gameName || ''}"`,
         b.players || 0,
+        `"${getPlayerCategory(b.players)}"`,
         `"${(b.customerName || '').replace(/"/g, '""')}"`,
         `"${b.customerPhone || ''}"`,
         b.ratePerPlayer || 0,
@@ -498,7 +501,8 @@ export default function SalesDashboard({
                 <tr className="bg-blue-50 border-b-2 border-blue-200 text-[11px] font-black text-blue-950 uppercase tracking-wider">
                   <th className="py-3.5 px-4">Date & Slot (24H)</th>
                   <th className="py-3.5 px-4">Customer Details</th>
-                  <th className="py-3.5 px-4">Game & Players</th>
+                  <th className="py-3.5 px-4">Game</th>
+                  <th className="py-3.5 px-4">Players & Category</th>
                   <th className="py-3.5 px-4">Payment Breakdown (Direct)</th>
                   <th className="py-3.5 px-4">Total Paid</th>
                   <th className="py-3.5 px-4">Offer / Ref</th>
@@ -556,16 +560,41 @@ export default function SalesDashboard({
                         </div>
                       </td>
 
-                      {/* Game & Players */}
+                      {/* Game Column (Prominent and Large) */}
                       <td className="py-4 px-4 align-top whitespace-nowrap">
-                        <div>
-                          <p className="text-sm font-black text-slate-900 leading-snug">
+                        <div className="space-y-1">
+                          <p className="text-base sm:text-lg font-black text-slate-950 tracking-tight">
                             {booking.gameName}
                           </p>
-                          <p className="text-xs font-bold text-slate-600 mt-0.5">
-                            <span className="font-mono text-slate-900 font-black">{booking.players}</span> Players
-                            <span className="text-blue-700 ml-1 font-mono font-bold">(@ ₹{booking.ratePerPlayer})</span>
-                          </p>
+                          <span className="inline-block text-[10px] font-black uppercase tracking-wider text-blue-800 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                            60 Min Escape Room
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Players & Category Column */}
+                      <td className="py-4 px-4 align-top whitespace-nowrap">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-1.5">
+                            <span className="text-base sm:text-lg font-mono font-black text-slate-950">
+                              {booking.players}
+                            </span>
+                            <span className="text-xs font-bold text-slate-600">Players</span>
+                            <span className="text-blue-700 text-xs font-mono font-bold">
+                              (@ ₹{booking.ratePerPlayer}/p)
+                            </span>
+                          </div>
+                          <div>
+                            <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-black border ${
+                              Number(booking.players) >= 7
+                                ? 'bg-purple-100 text-purple-900 border-purple-300'
+                                : Number(booking.players) >= 4
+                                ? 'bg-blue-100 text-blue-900 border-blue-300'
+                                : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                            }`}>
+                              [{getPlayerCategory(booking.players)} Category]
+                            </span>
+                          </div>
                         </div>
                       </td>
 

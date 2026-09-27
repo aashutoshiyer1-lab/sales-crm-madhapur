@@ -38,6 +38,24 @@ export const APPROVAL_REFERENCES = [
   "Khaja Sir"
 ];
 
+// Active staff members for Madhapur branch (closing & mummy actor tracking)
+export const STAFF_ROSTER = [
+  "Bhavani",
+  "Prudhvi"
+];
+
+/**
+ * Returns exact pricing category for closing reference:
+ * '2–3 Players', '4–6 Players', or '7+ Players'
+ */
+export const getPlayerCategory = (playerCount) => {
+  const count = Number(playerCount) || 0;
+  if (count <= 0) return 'Not Set';
+  if (count <= 3) return '2–3 Players';
+  if (count <= 6) return '4–6 Players';
+  return '7+ Players';
+};
+
 export const GAMES = [
   {
     id: "bank-heist",

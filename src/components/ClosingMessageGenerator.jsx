@@ -15,9 +15,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { getPaidTotal } from '../utils/pricingEngine';
-
-// Default staff names for selection
-const STAFF_LIST = ["Bhavani", "Prudhvi", "Rahul", "Naveen", "Vamshi", "Sai"];
+import { STAFF_ROSTER } from '../config/venueData';
 
 export default function ClosingMessageGenerator({ bookings, selectedDate, setSelectedDate }) {
   const [closingDate, setClosingDate] = useState(
@@ -468,7 +466,7 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
               {/* Preset Staff Quick Click */}
               <div className="w-full flex flex-wrap items-center gap-1.5 mb-1">
                 <span className="text-[11px] font-bold text-slate-500">Quick Select:</span>
-                {STAFF_LIST.map(st => (
+                {STAFF_ROSTER.map(st => (
                   <button
                     key={st}
                     type="button"
@@ -577,10 +575,9 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                   onChange={(e) => setClosingStaff(e.target.value)}
                   className="bg-white border-2 border-blue-300 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-black text-slate-950 outline-none cursor-pointer"
                 >
-                  <option value="Bhavani">Bhavani</option>
-                  <option value="Prudhvi">Prudhvi</option>
-                  <option value="Rahul">Rahul</option>
-                  <option value="Naveen">Naveen</option>
+                  {STAFF_ROSTER.map(st => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
                   <option value="custom">+ Other Custom Staff Name</option>
                 </select>
 

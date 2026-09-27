@@ -24,7 +24,8 @@ import {
   PAYMENT_MODES,
   MODES_REQUIRING_SCREENSHOT,
   generateTimeSlots,
-  isWeekend
+  isWeekend,
+  getPlayerCategory
 } from '../config/venueData';
 import { calculatePricing, formatCurrency, getPaidTotal } from '../utils/pricingEngine';
 
@@ -131,8 +132,10 @@ export default function BookingModal({
     bookingToEdit?.gameName || GAMES[0].name
   );
 
-  // Manual player count entry (No quick pill list, staff types manually or uses +/-)
-  const [players, setPlayers] = useState(bookingToEdit?.players || 4);
+  // Manual player count entry: Starts as empty string "" for new entries so staff enters group size explicitly!
+  const [players, setPlayers] = useState(
+    bookingToEdit?.players ? bookingToEdit.players : ''
+  );
   const [offerId, setOfferId] = useState(bookingToEdit?.offerId || 'none');
 
   // Approval Reference (Only Khaja Sir or Custom Name)
@@ -161,9 +164,10 @@ export default function BookingModal({
     return initial;
   });
 
-  // Determine active tier automatically
+  // Determine active tier automatically based on entered players
   const activeTier = useMemo(() => {
-    const count = Number(players) || 1;
+    const count = Number(players);
+    if (!count || count <= 0) return null;
     if (count <= 3) return '2-3';
     if (count <= 6) return '4-6';
     return '7+';
@@ -258,6 +262,16 @@ export default function BookingModal({
       return;
     }
 
+    if (!players || Number(players) <= 0) {
+      alert("Please enter the number of players (minimum 1 player required).");
+      return;
+    }
+
+    if (!gameName) {
+      alert("Please select an escape room game.");
+      return;
+    }
+
     const selectedOfferObj = OFFERS.find(o => o.id === offerId);
 
     let finalReference = '';
@@ -273,7 +287,9 @@ export default function BookingModal({
       if (val > 0) cleanPayments[m] = val;
     });
 
-    const isFullyPaid = paidTotal >= pricing.finalTotal;
+    const numPlayers = Number(players) || 1;
+    const isFullyPaid = paidTotal >= pricing.finalTotal && pricing.finalTotal > 0;
+    const shouldMarkPending = isPending || (!isFullyPaid && pricing.finalTotal > 0);
 
     const bookingData = {
       id: bookingToEdit?.id || `ETM-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -282,7 +298,8 @@ export default function BookingModal({
       date,
       timeSlot,
       gameName,
-      players: Number(players) || 2,
+      players: numPlayers,
+      playerCategory: getPlayerCategory(numPlayers),
       ratePerPlayer: pricing.ratePerPlayer,
       baseTotal: pricing.baseTotal,
       offerId,
@@ -295,8 +312,8 @@ export default function BookingModal({
       notes: notes.trim(),
       reference: finalReference,
       payments: cleanPayments,
-      isPending: isPending || (!isFullyPaid && pricing.finalTotal > 0),
-      paymentStatus: (isPending || (!isFullyPaid && pricing.finalTotal > 0)) ? 'pending' : 'paid'
+      isPending: shouldMarkPending,
+      paymentStatus: shouldMarkPending ? 'pending' : 'paid'
     };
 
     onSave(bookingData);
@@ -493,9 +510,16 @@ export default function BookingModal({
                 <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">3</span>
                 <span>Group Size & Auto-Tier Pricing</span>
               </h3>
-              <span className="text-[11px] font-black text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
-                Auto-Detected Tier: <strong className="text-blue-950">{activeTier} Players</strong>
-              </span>
+              <div className="flex items-center space-x-2">
+                <span className="text-[11px] font-black text-blue-900 bg-blue-100 px-3 py-1 rounded-full border border-blue-300">
+                  Category: <strong>{getPlayerCategory(players)}</strong>
+                </span>
+                {activeTier && (
+                  <span className="text-[11px] font-black text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-300">
+                    Tier: {activeTier}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Manual Player Entry Bar + 3 Auto-Selected Tiers */}
@@ -715,33 +739,36 @@ export default function BookingModal({
 
           {/* STEP 4: PAYMENT MODES & SPLIT COLLECTION */}
           <div className="bg-white p-5 rounded-2xl border-2 border-blue-300 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b-2 border-blue-100 pb-2.5">
-              <h3 className="text-xs font-black uppercase text-blue-900 tracking-wider flex items-center space-x-2">
-                <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">4</span>
-                <span>Payment Modes (Cash, Card, UPI, District, Razorpay, Kids)</span>
-              </h3>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b-2 border-blue-100 pb-3">
+              {/* LEFT: Prominent Advance / Pending Checkbox */}
+              <label className="flex items-center space-x-2.5 bg-amber-50 hover:bg-amber-100/80 border-2 border-amber-400 p-2 sm:p-2.5 rounded-xl cursor-pointer transition shadow-xs">
+                <input
+                  type="checkbox"
+                  checked={isPending}
+                  onChange={(e) => setIsPending(e.target.checked)}
+                  className="w-5 h-5 rounded text-amber-600 focus:ring-amber-500 accent-amber-600 cursor-pointer"
+                />
+                <span className="text-xs font-black text-amber-950 flex items-center space-x-1.5">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Mark as Advance / Pending Payment (Tick if unpaid)</span>
+                </span>
+              </label>
 
-              <div className="flex items-center space-x-2">
+              {/* RIGHT: Section Title and Clear */}
+              <div className="flex items-center space-x-3">
+                <h3 className="text-xs font-black uppercase text-blue-900 tracking-wider flex items-center space-x-1.5">
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-black">4</span>
+                  <span>Payment Modes (Cash, Card, UPI, etc.)</span>
+                </h3>
+
                 <button
                   type="button"
                   onClick={handleClearPayments}
-                  className="text-xs font-black text-blue-700 hover:text-blue-950 flex items-center space-x-1"
+                  className="text-xs font-black text-blue-700 hover:text-blue-950 flex items-center space-x-1 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span>Clear</span>
                 </button>
-
-                <label className="flex items-center space-x-2 bg-amber-50 px-3 py-1 rounded-lg border-2 border-amber-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isPending}
-                    onChange={(e) => setIsPending(e.target.checked)}
-                    className="rounded text-amber-600 focus:ring-amber-500 h-4 w-4"
-                  />
-                  <span className="text-xs font-black text-amber-950">
-                    Mark as Advance / Pending Payment
-                  </span>
-                </label>
               </div>
             </div>
 
