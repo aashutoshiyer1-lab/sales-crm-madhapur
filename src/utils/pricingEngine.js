@@ -34,7 +34,8 @@ export const calculatePricing = ({
   players,
   offerId = 'none',
   customRate = null,
-  customDiscount = null
+  customDiscount = null,
+  customDiscountPercent = null
 }) => {
   const count = Math.max(1, parseInt(players, 10) || 1);
   const standardRate = getTierRatePerPlayer(date, count);
@@ -45,7 +46,9 @@ export const calculatePricing = ({
   const baseTotal = count * ratePerPlayer;
 
   const offer = OFFERS.find(o => o.id === offerId) || OFFERS[0];
-  const offerPercent = offer ? offer.discountPercent : 0;
+  const offerPercent = customDiscountPercent !== null && customDiscountPercent !== undefined && !isNaN(customDiscountPercent)
+    ? Math.min(100, Math.max(0, Number(customDiscountPercent)))
+    : (offer ? offer.discountPercent : 0);
 
   let discountAmount = 0;
   if (customDiscount !== null && customDiscount !== undefined && !isNaN(customDiscount)) {
@@ -63,7 +66,7 @@ export const calculatePricing = ({
     discountPercent: offerPercent,
     discountAmount,
     finalTotal,
-    isComplimentary: offerId === 'complimentary' || finalTotal === 0
+    isComplimentary: offerId === 'complimentary' || offerPercent === 100 || finalTotal === 0
   };
 };
 

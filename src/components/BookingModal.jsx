@@ -21,6 +21,7 @@ import {
 import {
   GAMES,
   OFFERS,
+  APPROVAL_REFERENCES,
   PAYMENT_MODES,
   MODES_REQUIRING_SCREENSHOT,
   generateTimeSlots,
@@ -148,21 +149,30 @@ export default function BookingModal({
   );
   const [offerId, setOfferId] = useState(bookingToEdit?.offerId || 'none');
 
+  // Selectable Discount Percent (supports offers with allowedPercents or isCustomPercent)
+  const [discountPercent, setDiscountPercent] = useState(() => {
+    if (bookingToEdit?.discountPercent !== undefined && bookingToEdit?.discountPercent !== null) {
+      return Number(bookingToEdit.discountPercent);
+    }
+    const off = OFFERS.find(o => o.id === (bookingToEdit?.offerId || 'none'));
+    return off ? off.discountPercent : 0;
+  });
+
   // Custom Reason / Note for Any Offer or Discount
   const [customDiscountReason, setCustomDiscountReason] = useState(
     bookingToEdit?.customDiscountReason || bookingToEdit?.customNote || ''
   );
 
-  // Approval Reference (Only Khaja Sir or Custom Name)
+  // Approval Reference (Standard Nayeem Sir / Khaja Sir or Custom Name)
   const initialRef = bookingToEdit?.reference || '';
-  const isInitialKhaja = initialRef === 'Khaja Sir';
+  const isInitialStdRef = (APPROVAL_REFERENCES || []).includes(initialRef);
   const [refType, setRefType] = useState(() => {
     if (!initialRef) return 'none';
-    if (isInitialKhaja) return 'Khaja Sir';
+    if (isInitialStdRef) return initialRef;
     return 'custom';
   });
   const [customRefName, setCustomRefName] = useState(() => {
-    return isInitialKhaja ? '' : initialRef;
+    return isInitialStdRef ? '' : initialRef;
   });
 
   // 4. Split Payments State
@@ -190,14 +200,42 @@ export default function BookingModal({
       setGameName(bookingToEdit.gameName || '');
       setPlayers(bookingToEdit.players || '');
       setOfferId(bookingToEdit.offerId || 'none');
+      
+      const off = OFFERS.find(o => o.id === (bookingToEdit.offerId || 'none'));
+      setDiscountPercent(
+        bookingToEdit.discountPercent !== undefined && bookingToEdit.discountPercent !== null
+          ? Number(bookingToEdit.discountPercent)
+          : (off ? off.discountPercent : 0)
+      );
+
       setCustomDiscountReason(bookingToEdit.customDiscountReason || bookingToEdit.customNote || '');
-      const isKhaja = bookingToEdit.reference === 'Khaja Sir';
-      setRefType(bookingToEdit.reference ? (isKhaja ? 'Khaja Sir' : 'custom') : 'none');
-      setCustomRefName(isKhaja ? '' : (bookingToEdit.reference || ''));
+      const refVal = bookingToEdit.reference || '';
+      const isStd = (APPROVAL_REFERENCES || []).includes(refVal);
+      setRefType(refVal ? (isStd ? refVal : 'custom') : 'none');
+      setCustomRefName(isStd ? '' : refVal);
       setIsPending(bookingToEdit.isPending ?? (bookingToEdit.paymentStatus === 'pending'));
       setPayments(bookingToEdit.payments ? { ...bookingToEdit.payments } : {});
     }
   }, [bookingToEdit]);
+
+  // Handle Offer Selection and auto-populate default reference & discount percent
+  const handleOfferChange = (newOfferId) => {
+    setOfferId(newOfferId);
+    const selected = OFFERS.find(o => o.id === newOfferId);
+    if (selected) {
+      setDiscountPercent(selected.discountPercent);
+      if (selected.defaultReference) {
+        setRefType(selected.defaultReference);
+        setCustomRefName('');
+      } else if (selected.requiresReference && refType === 'none') {
+        setRefType('Nayeem Sir');
+        setCustomRefName('');
+      } else if (!selected.requiresReference && !selected.defaultReference) {
+        setRefType('none');
+        setCustomRefName('');
+      }
+    }
+  };
 
   // Determine active tier automatically based on entered players
   const activeTier = useMemo(() => {
@@ -222,9 +260,10 @@ export default function BookingModal({
     return calculatePricing({
       date,
       players,
-      offerId
+      offerId,
+      customDiscountPercent: discountPercent
     });
-  }, [date, players, offerId]);
+  }, [date, players, offerId, discountPercent]);
 
   const paidTotal = useMemo(() => getPaidTotal(payments), [payments]);
   const remainingBalance = Math.max(0, pricing.finalTotal - paidTotal);
@@ -310,10 +349,22 @@ export default function BookingModal({
     }
 
     const selectedOfferObj = OFFERS.find(o => o.id === offerId);
+    const numPlayers = Number(players) || 1;
+
+    // Prompt/confirm pax bracket category for complimentary game (Kids Under 5 Years)
+    if (selectedOfferObj?.isComplimentary || offerId === 'complimentary') {
+      const tierCategory = getPlayerCategory(numPlayers);
+      const confirmed = window.confirm(
+        `Confirm Complimentary Game (100% OFF) for ${numPlayers} player(s) in category: ${tierCategory}?`
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
 
     let finalReference = '';
-    if (refType === 'Khaja Sir') {
-      finalReference = 'Khaja Sir';
+    if ((APPROVAL_REFERENCES || []).includes(refType)) {
+      finalReference = refType;
     } else if (refType === 'custom') {
       finalReference = customRefName.trim();
     }
@@ -324,7 +375,6 @@ export default function BookingModal({
       if (val > 0) cleanPayments[m] = val;
     });
 
-    const numPlayers = Number(players) || 1;
     const isFullyPaid = paidTotal >= pricing.finalTotal && pricing.finalTotal > 0;
 
     // Check if entry has 0 payment and is not marked as advance/pending
@@ -368,6 +418,8 @@ export default function BookingModal({
     onClose();
   };
 
+  const selectedOfferObj = useMemo(() => OFFERS.find(o => o.id === offerId), [offerId]);
+
   // Options for custom dropdowns
   const slotOptions = useMemo(() => {
     return slotGroups.all.map(s => ({ value: s, label: s }));
@@ -384,11 +436,11 @@ export default function BookingModal({
     return OFFERS.map(o => ({ value: o.id, label: o.name }));
   }, []);
 
-  const refOptions = [
+  const refOptions = useMemo(() => [
     { value: 'none', label: 'None (Standard Rate)' },
-    { value: 'Khaja Sir', label: 'Khaja Sir' },
+    ...(APPROVAL_REFERENCES || ['Nayeem Sir', 'Khaja Sir']).map(ref => ({ value: ref, label: ref })),
     { value: 'custom', label: '+ Specific / Other Custom Name' }
-  ];
+  ], []);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
@@ -758,9 +810,48 @@ export default function BookingModal({
                   label="Deal / Discount Offer"
                   value={offerId}
                   options={offerOptions}
-                  onChange={(val) => setOfferId(val)}
+                  onChange={(val) => handleOfferChange(val)}
                   icon={Tag}
                 />
+
+                {/* Selectable % OFF if offer has allowedPercents */}
+                {selectedOfferObj?.allowedPercents && (
+                  <div className="mt-2 p-2 bg-blue-50/80 rounded-xl border border-blue-200 animate-fadeIn">
+                    <span className="text-[11px] font-black text-blue-900 block mb-1">Select Discount %:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedOfferObj.allowedPercents.map(pct => (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() => setDiscountPercent(pct)}
+                          className={`px-2 py-0.5 rounded-lg text-xs font-black transition ${
+                            discountPercent === pct
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'bg-white border border-blue-300 text-blue-900 hover:bg-blue-100'
+                          }`}
+                        >
+                          {pct}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom % Input if isCustomPercent */}
+                {selectedOfferObj?.isCustomPercent && (
+                  <div className="mt-2 p-2 bg-blue-50/80 rounded-xl border border-blue-200 flex items-center space-x-2 animate-fadeIn">
+                    <span className="text-xs font-black text-blue-900">Custom %:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={discountPercent}
+                      onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                      className="w-16 bg-white border-2 border-blue-400 focus:border-blue-600 rounded-lg px-2 py-1 text-center font-mono font-black text-xs text-slate-950 outline-none"
+                    />
+                    <span className="text-xs font-bold text-slate-700">% OFF</span>
+                  </div>
+                )}
               </div>
 
               {/* Approval Reference Custom Dropdown */}

@@ -12,10 +12,13 @@ import {
   Share2,
   Sparkles,
   DollarSign,
-  AlertCircle
+  AlertCircle,
+  Printer,
+  RotateCcw,
+  X
 } from 'lucide-react';
 import { getPaidTotal } from '../utils/pricingEngine';
-import { STAFF_ROSTER } from '../config/venueData';
+import { STAFF_ROSTER, GAMES, OFFERS } from '../config/venueData';
 import {
   rtdb,
   ref,
@@ -24,6 +27,112 @@ import {
   CLOSING_REPORTS_PATH,
   saveClosingReportToFirebase
 } from '../config/firebase';
+
+/**
+ * Format custom notes with proper grammar:
+ * - Capitalize first letter
+ * - Trailing punctuation (. ! ?)
+ * - Strip prefixes like "Note:", "note -", "custom note:", etc.
+ * - Never output "None", "no discount", or empty
+ */
+export const formatCustomNoteGrammar = (note) => {
+  if (!note || typeof note !== 'string') return '';
+  let cleaned = note.trim();
+  if (!cleaned) return '';
+
+  // Strip prefixes like "Note:", "note -", "custom note:", etc.
+  cleaned = cleaned.replace(/^(?:note|custom note)\s*[:-]?\s*/i, '').trim();
+
+  // If empty or matches none / no discount / n/a / nil
+  if (!cleaned || /^(?:none|no discount|n\/?a|nil)$/i.test(cleaned)) {
+    return '';
+  }
+
+  // Capitalize first letter
+  cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+
+  // Ensure trailing punctuation (. ! ?)
+  if (!/[.!?]$/.test(cleaned)) {
+    cleaned += '.';
+  }
+
+  return cleaned;
+};
+
+/**
+ * Construct the base sentence for each booking note:
+ * - Website / District / Activity Kids
+ * - Complimentary kids under 5
+ * - Standard discounts (Cross Promo, Second Game, Birthday, Corporate, High Prices)
+ * - Custom discount
+ */
+export const generateBookingNoteSentence = (booking) => {
+  const pax = booking.players || 1;
+  const room = booking.gameName || 'Escape Room';
+  const offerId = booking.offerId || 'none';
+  const offer = OFFERS.find(o => o.id === offerId);
+  const ref = booking.reference ? booking.reference : (offer?.defaultReference || 'Nayeem Sir');
+  const pct = booking.discountPercent || offer?.discountPercent || 0;
+  const customReason = (booking.customDiscountReason || '').trim();
+
+  // 1. Website / District / Activity Kids (Prepaid)
+  if (offerId === 'website_booking' || offer?.channel === 'Website') {
+    return `Today we had a group of ${pax} who made booking through Website for ${room}.`;
+  }
+  if (offerId === 'district_app' || offer?.channel === 'District') {
+    return `Today we had a group of ${pax} who made booking through District for ${room}.`;
+  }
+  if (offerId === 'activity_kids' || offer?.channel === 'Activity Kids') {
+    return `Today we had a group of ${pax} who made booking through Activity Kids for ${room}.`;
+  }
+
+  // 2. Complimentary under 5
+  if (offerId === 'complimentary' || offer?.isComplimentary) {
+    return `Given complementary game to ${pax} kids as they were under 5 years for ${room} and as per ${ref} reference.`;
+  }
+
+  // 3. Custom Discount
+  if (offerId === 'custom_discount' || offer?.isCustomPercent) {
+    const reasonPart = customReason ? customReason : 'custom discount';
+    return `Given ${pct}% discount to group of ${pax} players for ${room} as ${reasonPart}.`;
+  }
+
+  // 4. Standard Discounts (Cross Promo, Second Game, Birthday, Corporate, High Prices, etc.)
+  if (pct > 0 || (offer && offerId !== 'none')) {
+    const reasonText = offer?.reasonText || customReason || 'special offer';
+    return `Given ${pct}% discount to group of ${pax} players for ${room} as ${reasonText} and as per ${ref} reference.`;
+  }
+
+  // Standard rate booking with note
+  return `Today we had a group of ${pax} players for ${room}.`;
+};
+
+/**
+ * Opens a print window with monospace typography and triggers window.print()
+ */
+export const executePrintWindow = (title, textContent) => {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) return;
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>${title}</title>
+        <style>
+          body { font-family: 'Courier New', monospace; white-space: pre-wrap; padding: 24px; font-size: 14px; line-height: 1.6; color: #000; }
+          h2 { margin-bottom: 16px; border-bottom: 2px solid #000; padding-bottom: 6px; }
+        </style>
+      </head>
+      <body>
+        <h2>${title}</h2>
+        <div>${(textContent || '').replace(/\n/g, '<br>')}</div>
+        <script>
+          window.onload = function() { window.print(); };
+        </script>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+};
 
 const getInitialClosingData = (targetDate) => {
   try {
@@ -58,6 +167,11 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
   const [shortAmount, setShortAmount] = useState(initialSaved?.shortAmount || "00");
   const [closingNote, setClosingNote] = useState(initialSaved?.closingNote || "");
 
+  // Print Escape Notes State
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printNotesText, setPrintNotesText] = useState(initialSaved?.printNotesText || "");
+  const [isPrintNotesCustomized, setIsPrintNotesCustomized] = useState(initialSaved?.isPrintNotesCustomized || false);
+
   const [copiedStatus, setCopiedStatus] = useState(false);
 
   // Sync state when closing date changes (load from LocalStorage)
@@ -70,6 +184,11 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       setExcessAmount(saved.excessAmount || "00");
       setShortAmount(saved.shortAmount || "00");
       setClosingNote(saved.closingNote || "");
+      setPrintNotesText(saved.printNotesText || "");
+      setIsPrintNotesCustomized(saved.isPrintNotesCustomized || false);
+    } else {
+      setPrintNotesText("");
+      setIsPrintNotesCustomized(false);
     }
   }, [closingDate]);
 
@@ -82,6 +201,8 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       excessAmount,
       shortAmount,
       closingNote,
+      printNotesText: isPrintNotesCustomized ? printNotesText : "",
+      isPrintNotesCustomized,
       updatedAt: new Date().toISOString()
     };
 
@@ -92,7 +213,7 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     }
 
     saveClosingReportToFirebase(closingDate, payload);
-  }, [closingDate, closingStaff, customClosingStaff, mummyActors, excessAmount, shortAmount, closingNote]);
+  }, [closingDate, closingStaff, customClosingStaff, mummyActors, excessAmount, shortAmount, closingNote, printNotesText, isPrintNotesCustomized]);
 
   // Real-time remote listener from Firebase RTDB (cross-tab / multi-device sync)
   useEffect(() => {
@@ -108,6 +229,8 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
           if (data.excessAmount !== undefined) setExcessAmount(data.excessAmount);
           if (data.shortAmount !== undefined) setShortAmount(data.shortAmount);
           if (data.closingNote !== undefined) setClosingNote(data.closingNote);
+          if (data.printNotesText !== undefined) setPrintNotesText(data.printNotesText);
+          if (data.isPrintNotesCustomized !== undefined) setIsPrintNotesCustomized(data.isPrintNotesCustomized);
         }
       });
       return () => unsubscribe();
@@ -226,6 +349,67 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     if (setSelectedDate) setSelectedDate(today);
   };
 
+  // Group discount/note bookings by room for WhatsApp note section & print preview
+  const groupedRoomNotes = useMemo(() => {
+    const discountOrNoteBookings = dayBookings.filter(b => {
+      const hasOffer = b.offerId && b.offerId !== 'none';
+      const hasDiscount = (Number(b.discountPercent) > 0) || (Number(b.discountAmount) > 0);
+      const hasReason = !!(b.customDiscountReason && b.customDiscountReason.trim());
+      const hasCustomNote = !!(b.customNote && b.customNote.trim());
+      const hasNotes = !!(b.notes && b.notes.trim());
+      return hasOffer || hasDiscount || hasReason || hasCustomNote || hasNotes;
+    });
+
+    const roomMap = new Map();
+    // Pre-populate with standard GAMES from venueData
+    GAMES.forEach(g => {
+      roomMap.set(g.name, []);
+    });
+
+    discountOrNoteBookings.forEach(b => {
+      const room = b.gameName || 'Other Rooms';
+      if (!roomMap.has(room)) {
+        roomMap.set(room, []);
+      }
+      roomMap.get(room).push(b);
+    });
+
+    return roomMap;
+  }, [dayBookings]);
+
+  // Auto-generated print text from grouped room notes
+  const autoGeneratedPrintNotes = useMemo(() => {
+    const sections = [];
+    groupedRoomNotes.forEach((roomBookings, roomName) => {
+      if (roomBookings.length === 0) return;
+      const lines = [];
+      lines.push(`*${roomName.toUpperCase()}*`);
+      roomBookings.forEach((b, index) => {
+        lines.push(`${index + 1}. ${generateBookingNoteSentence(b)}`);
+        const rawNote = (b.customDiscountReason || b.customNote || b.notes || '').trim();
+        const formattedGrammarNote = formatCustomNoteGrammar(rawNote);
+        if (formattedGrammarNote) {
+          lines.push(formattedGrammarNote);
+        }
+        lines.push(`Customer Name: ${b.customerName || 'N/A'}`);
+        lines.push(`Mobile Number: ${b.customerPhone || 'N/A'}`);
+        lines.push(``);
+      });
+      sections.push(lines.join('\n').trim());
+    });
+
+    const cleanManual = closingNote.trim();
+    if (cleanManual && !/^(?:none|no discount|n\/?a|nil)$/i.test(cleanManual)) {
+      sections.push(`*ADDITIONAL NOTES:*\n${cleanManual}`);
+    }
+
+    if (sections.length === 0) {
+      return "No special discounts, offers, or notes recorded for this date.";
+    }
+
+    return sections.join('\n\n');
+  }, [groupedRoomNotes, closingNote]);
+
   // Construct Exact WhatsApp Closing Message Text
   const generatedMessage = useMemo(() => {
     const lines = [];
@@ -287,50 +471,38 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     // Note
     lines.push(`*NOTE:-*`);
 
-    const noteBlocks = [];
+    const roomBlocks = [];
+    groupedRoomNotes.forEach((roomBookings, roomName) => {
+      if (roomBookings.length === 0) return;
+      const sectionLines = [];
+      sectionLines.push(`*${roomName.toUpperCase()}*`);
+      roomBookings.forEach((b, index) => {
+        const itemLines = [];
+        const mainSentence = generateBookingNoteSentence(b);
+        itemLines.push(`${index + 1}. ${mainSentence}`);
 
-    // Filter day bookings that have an offer/discount or a custom note
-    const discountOrNoteBookings = dayBookings.filter(b => {
-      const hasOffer = b.offerId && b.offerId !== 'none' && (b.discountPercent > 0 || b.discountAmount > 0);
-      const hasReason = !!(b.customDiscountReason && b.customDiscountReason.trim());
-      const hasCustomNote = !!(b.customNote && b.customNote.trim());
-      const hasNotes = !!(b.notes && b.notes.trim());
-      return hasOffer || hasReason || hasCustomNote || hasNotes;
-    });
+        const rawNote = (b.customDiscountReason || b.customNote || b.notes || '').trim();
+        const formattedGrammarNote = formatCustomNoteGrammar(rawNote);
+        if (formattedGrammarNote) {
+          itemLines.push(formattedGrammarNote);
+        }
 
-    discountOrNoteBookings.forEach(b => {
-      const blockLines = [];
-      const offerLabel = (b.offerName && b.offerId !== 'none')
-        ? b.offerName
-        : (b.gameName ? `${b.gameName} Booking` : 'Booking');
-      blockLines.push(`• *${offerLabel}*`);
+        itemLines.push(`Customer Name: ${b.customerName || 'N/A'}`);
+        itemLines.push(`Mobile Number: ${b.customerPhone || 'N/A'}`);
 
-      const rawNote = (b.customDiscountReason || b.customNote || b.notes || '').trim();
-      const isNone = !rawNote || /^(\s*note\s*:?\s*)?none\s*$/i.test(rawNote) || /^no\s*discount$/i.test(rawNote);
-
-      if (!isNone) {
-        // Populate the custom note on the next line with proper grammar
-        const formattedNote = /^note\s*:/i.test(rawNote) ? rawNote : `Note: ${rawNote}`;
-        blockLines.push(formattedNote);
-      }
-
-      // Immediately below the custom note for that customer, populate their details formatted as:
-      // Customer Name: <CUSTOMER_NAME>
-      // Mobile Number: <PHONE_NUMBER>
-      blockLines.push(`Customer Name: ${b.customerName || 'N/A'}`);
-      blockLines.push(`Mobile Number: ${b.customerPhone || 'N/A'}`);
-
-      noteBlocks.push(blockLines.join('\n'));
+        sectionLines.push(itemLines.join('\n'));
+      });
+      roomBlocks.push(sectionLines.join('\n\n'));
     });
 
     // Manual Staff Closing Notes (if any, never print "None")
     const cleanManualNote = closingNote.trim();
-    if (cleanManualNote && !/^(\s*note\s*:?\s*)?none\s*$/i.test(cleanManualNote)) {
-      noteBlocks.push(cleanManualNote);
+    if (cleanManualNote && !/^(?:none|no discount|n\/?a|nil)$/i.test(cleanManualNote)) {
+      roomBlocks.push(cleanManualNote);
     }
 
-    if (noteBlocks.length > 0) {
-      lines.push(noteBlocks.join('\n\n'));
+    if (roomBlocks.length > 0) {
+      lines.push(roomBlocks.join('\n\n'));
     }
     lines.push(``);
 
@@ -347,7 +519,7 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     shortAmount,
     closingNote,
     finalStaffName,
-    dayBookings
+    groupedRoomNotes
   ]);
 
   // Copy to Clipboard
@@ -721,7 +893,7 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
         <div className="lg:col-span-5 space-y-4">
           <div className="bg-white p-5 rounded-3xl border-2 border-blue-400 shadow-xl sticky top-24 space-y-4">
             
-            <div className="flex items-center justify-between border-b-2 border-blue-100 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-blue-100 pb-3">
               <div>
                 <span className="text-xs font-black uppercase text-blue-900 tracking-wider block">
                   WhatsApp Preview
@@ -731,9 +903,26 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                 </span>
               </div>
 
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                WhatsApp Format
-              </span>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isPrintNotesCustomized || !printNotesText) {
+                      setPrintNotesText(autoGeneratedPrintNotes);
+                    }
+                    setIsPrintModalOpen(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white flex items-center space-x-1.5 shadow-sm transition active:scale-95 cursor-pointer"
+                  title="Print Escape Notes"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print Escape Notes</span>
+                </button>
+
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  WhatsApp
+                </span>
+              </div>
             </div>
 
             {/* Formatted Code Block */}
@@ -779,6 +968,93 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
         </div>
 
       </div>
+
+      {/* Escape Room Notes Print Preview Modal */}
+      {isPrintModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+          <div className="bg-white w-full max-w-3xl rounded-3xl border-2 border-blue-400 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-blue-700 to-indigo-950 text-white flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 rounded-xl bg-white text-blue-900 flex items-center justify-center font-black">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-white">
+                    Escape Room Notes Print Preview
+                  </h3>
+                  <p className="text-xs text-blue-200 font-bold">
+                    {formattedDisplayDate} • Grouped by Escape Room
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPrintModalOpen(false)}
+                className="p-1.5 text-blue-200 hover:text-white hover:bg-white/10 rounded-xl transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-black text-blue-950 uppercase tracking-wider">
+                  Editable Notes for Printing:
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPrintNotesText(autoGeneratedPrintNotes);
+                    setIsPrintNotesCustomized(false);
+                  }}
+                  className="px-2.5 py-1 text-xs font-black text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition flex items-center space-x-1 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Revert to Auto</span>
+                </button>
+              </div>
+
+              <textarea
+                rows={14}
+                value={printNotesText || autoGeneratedPrintNotes}
+                onChange={(e) => {
+                  setPrintNotesText(e.target.value);
+                  setIsPrintNotesCustomized(true);
+                }}
+                className="w-full bg-[#fcfefe] border-2 border-blue-300 focus:border-blue-600 rounded-2xl p-4 font-mono text-xs sm:text-sm leading-relaxed text-slate-900 outline-none shadow-inner"
+              />
+              <p className="text-[11px] text-slate-500 font-bold">
+                You can edit the text above before printing. Click "Revert to Auto" to restore original generated notes.
+              </p>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t-2 border-blue-100 flex items-center justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setIsPrintModalOpen(false)}
+                className="px-4 py-2 text-xs sm:text-sm font-black text-slate-700 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const textToPrint = printNotesText || autoGeneratedPrintNotes;
+                  executePrintWindow(`Escape Room Notes - ${formattedDisplayDate}`, textToPrint);
+                  setIsPrintModalOpen(false);
+                }}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-black rounded-xl shadow-md transition flex items-center space-x-2 active:scale-95 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print Escape Notes</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

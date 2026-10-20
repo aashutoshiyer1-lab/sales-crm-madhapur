@@ -26,15 +26,117 @@ export const MODES_REQUIRING_SCREENSHOT = [
 ];
 
 export const OFFERS = [
-  { id: "none", name: "No Discount (Standard Rate)", discountPercent: 0 },
-  { id: "high_price_retention", name: "High Prices Retention (10% OFF)", discountPercent: 10 },
-  { id: "birthday_package", name: "Birthday Package (10% OFF)", discountPercent: 10 },
-  { id: "second_game", name: "Second Game Special (20% OFF)", discountPercent: 20 },
-  { id: "cross_promotion", name: "Cross Promotion Coupon (30% OFF)", discountPercent: 30 },
-  { id: "complimentary", name: "Kids Under 6 Years (100% OFF)", discountPercent: 100 }
+  {
+    id: "none",
+    name: "No Discount (Standard Rate)",
+    discountPercent: 0,
+    defaultReference: null,
+    requiresReference: false,
+    reasonText: ""
+  },
+  {
+    id: "website_booking",
+    name: "Website Booking (Razorpay)",
+    discountPercent: 0,
+    defaultReference: null,
+    requiresReference: false,
+    isPrepaid: true,
+    channel: "Website",
+    reasonText: "Website"
+  },
+  {
+    id: "district_app",
+    name: "District App",
+    discountPercent: 0,
+    defaultReference: null,
+    requiresReference: false,
+    isPrepaid: true,
+    channel: "District",
+    reasonText: "District"
+  },
+  {
+    id: "activity_kids",
+    name: "Activity Kids",
+    discountPercent: 0,
+    defaultReference: null,
+    requiresReference: false,
+    isPrepaid: true,
+    channel: "Activity Kids",
+    reasonText: "Activity Kids"
+  },
+  {
+    id: "cross_promotion",
+    name: "Cross Promotion Coupon",
+    discountPercent: 30,
+    allowedPercents: [10, 15, 20, 25, 30],
+    defaultReference: "Nayeem Sir",
+    requiresReference: true,
+    reasonText: "they had cross promotion coupon"
+  },
+  {
+    id: "cross_promotion_brochure",
+    name: "Cross Promotion Brochure",
+    discountPercent: 30,
+    defaultReference: "Nayeem Sir",
+    requiresReference: true,
+    reasonText: "they had cross promotion brochure"
+  },
+  {
+    id: "second_game",
+    name: "Second Game Special",
+    discountPercent: 20,
+    allowedPercents: [10, 20],
+    defaultReference: "Nayeem Sir",
+    requiresReference: true,
+    reasonText: "it was their second game on the same day"
+  },
+  {
+    id: "birthday_package",
+    name: "Birthday Package",
+    discountPercent: 15,
+    allowedPercents: [10, 15],
+    defaultReference: "Nayeem Sir",
+    requiresReference: true,
+    reasonText: "they had birthday package"
+  },
+  {
+    id: "corporate_package",
+    name: "Corporate Package",
+    discountPercent: 15,
+    defaultReference: "Nayeem Sir",
+    requiresReference: true,
+    reasonText: "it was corporate package"
+  },
+  {
+    id: "high_price_retention",
+    name: "Going Back Due to High Prices",
+    discountPercent: 10,
+    defaultReference: "Nayeem Sir",
+    requiresReference: true,
+    reasonText: "they were going back due to high prices"
+  },
+  {
+    id: "complimentary",
+    name: "Complimentary Game (Kids Under 5 Years)",
+    discountPercent: 100,
+    defaultReference: "Nayeem Sir",
+    requiresReference: true,
+    isComplimentary: true,
+    reasonText: "they were under 5 years"
+  },
+  {
+    id: "custom_discount",
+    name: "Custom Reason Discount",
+    discountPercent: 0,
+    defaultReference: null,
+    requiresReference: false,
+    isCustomPercent: true,
+    reasonText: "custom"
+  }
 ];
 
 export const APPROVAL_REFERENCES = [
+  "Nayeem Sir",
   "Khaja Sir"
 ];
 
