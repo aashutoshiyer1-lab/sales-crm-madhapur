@@ -240,21 +240,31 @@ export default function App() {
   };
 
   // Open New Booking Modal
-  const handleOpenNewBooking = (defaults = {}) => {
+  const handleOpenNewBooking = useCallback((defaults = {}) => {
     setBookingToEdit(null);
     setBookingSlotDefaults({
-      date: defaults.date || selectedDate,
-      timeSlot: defaults.timeSlot || null
+      date: defaults?.date || selectedDate,
+      timeSlot: defaults?.timeSlot || null
     });
     setIsBookingModalOpen(true);
-  };
+  }, [selectedDate]);
 
   // Open Edit Booking Modal
-  const handleOpenEditBooking = (booking) => {
+  const handleOpenEditBooking = useCallback((booking) => {
+    if (!booking) return;
     setBookingToEdit(booking);
     setBookingSlotDefaults({ date: booking.date, timeSlot: booking.timeSlot });
     setIsBookingModalOpen(true);
-  };
+  }, []);
+
+  // Smart handler: routes to Edit if target has an ID, or New if just slot defaults
+  const handleOpenBookingModal = useCallback((target = {}) => {
+    if (target && target.id) {
+      handleOpenEditBooking(target);
+    } else {
+      handleOpenNewBooking(target);
+    }
+  }, [handleOpenEditBooking, handleOpenNewBooking]);
 
   // Open Receipt Modal
   const handleOpenDetail = (booking) => {
@@ -338,7 +348,9 @@ export default function App() {
             bookings={bookings}
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
-            onOpenBookingModal={handleOpenNewBooking}
+            onOpenBookingModal={handleOpenBookingModal}
+            onOpenNewBooking={handleOpenNewBooking}
+            onOpenEditBooking={handleOpenEditBooking}
             onOpenDetailModal={handleOpenDetail}
             onDeleteBooking={handleDeleteBooking}
           />
@@ -362,6 +374,7 @@ export default function App() {
 
       {/* Booking Form Modal */}
       <BookingModal
+        key={bookingToEdit ? `edit-${bookingToEdit.id}` : `new-${bookingSlotDefaults.date || ''}-${bookingSlotDefaults.timeSlot || ''}`}
         isOpen={isBookingModalOpen}
         onClose={() => setIsBookingModalOpen(false)}
         onSave={handleSaveBooking}

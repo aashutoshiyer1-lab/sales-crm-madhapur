@@ -47,7 +47,7 @@ function CustomDropdown({ label, value, options, onChange, icon: Icon, placehold
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  const selectedOption = options.find(o => o.value === value) || options[0];
+  const selectedOption = options.find(o => o.value === value);
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -65,8 +65,8 @@ function CustomDropdown({ label, value, options, onChange, icon: Icon, placehold
       >
         <div className="flex items-center space-x-2 truncate pr-2">
           {Icon && <Icon className="w-4 h-4 text-blue-600 shrink-0" />}
-          <span className="font-black font-mono text-slate-950 text-sm truncate">
-            {selectedOption ? selectedOption.label : placeholder}
+          <span className={`font-black font-mono text-sm truncate ${selectedOption && selectedOption.value !== '' ? 'text-slate-950' : 'text-slate-400'}`}>
+            {selectedOption && selectedOption.value !== '' ? selectedOption.label : placeholder}
           </span>
         </div>
         <ChevronDown className={`w-4 h-4 text-blue-600 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-700' : ''}`} />
@@ -137,9 +137,9 @@ export default function BookingModal({
     bookingToEdit?.timeSlot || defaultSlot || slotGroups.standard[0] || '11:00 AM'
   );
 
-  // 3. Game & Pricing Selection
+  // 3. Game & Pricing Selection (Starts as empty string "" - NO auto-selected game!)
   const [gameName, setGameName] = useState(
-    bookingToEdit?.gameName || GAMES[0].name
+    bookingToEdit?.gameName || ''
   );
 
   // Manual player count entry: Starts as empty string "" for new entries so staff enters group size explicitly!
@@ -178,6 +178,26 @@ export default function BookingModal({
     PAYMENT_MODES.forEach(m => { initial[m] = ''; });
     return initial;
   });
+
+  // Real-time synchronization when bookingToEdit prop changes
+  useEffect(() => {
+    if (bookingToEdit) {
+      setCustomerName(bookingToEdit.customerName || '');
+      setCustomerPhone(bookingToEdit.customerPhone || '');
+      setNotes(bookingToEdit.notes || '');
+      setDate(bookingToEdit.date || defaultDate || new Date().toISOString().split('T')[0]);
+      setTimeSlot(bookingToEdit.timeSlot || defaultSlot || '11:00 AM');
+      setGameName(bookingToEdit.gameName || '');
+      setPlayers(bookingToEdit.players || '');
+      setOfferId(bookingToEdit.offerId || 'none');
+      setCustomDiscountReason(bookingToEdit.customDiscountReason || bookingToEdit.customNote || '');
+      const isKhaja = bookingToEdit.reference === 'Khaja Sir';
+      setRefType(bookingToEdit.reference ? (isKhaja ? 'Khaja Sir' : 'custom') : 'none');
+      setCustomRefName(isKhaja ? '' : (bookingToEdit.reference || ''));
+      setIsPending(bookingToEdit.isPending ?? (bookingToEdit.paymentStatus === 'pending'));
+      setPayments(bookingToEdit.payments ? { ...bookingToEdit.payments } : {});
+    }
+  }, [bookingToEdit]);
 
   // Determine active tier automatically based on entered players
   const activeTier = useMemo(() => {
@@ -284,8 +304,8 @@ export default function BookingModal({
       return;
     }
 
-    if (!gameName) {
-      alert("Please select an escape room game.");
+    if (!gameName || gameName.trim() === '') {
+      alert("Please select an escape room game before confirming.");
       return;
     }
 
@@ -306,6 +326,13 @@ export default function BookingModal({
 
     const numPlayers = Number(players) || 1;
     const isFullyPaid = paidTotal >= pricing.finalTotal && pricing.finalTotal > 0;
+
+    // Check if entry has 0 payment and is not marked as advance/pending
+    if (paidTotal === 0 && !isPending && pricing.finalTotal > 0) {
+      alert("No payment was recorded. Please check 'Mark as Advance / Pending Payment' on the left or enter payment amounts before confirming.");
+      return;
+    }
+
     const shouldMarkPending = isPending || (!isFullyPaid && pricing.finalTotal > 0);
 
     const trimmedCustomReason = customDiscountReason.trim();
@@ -347,7 +374,10 @@ export default function BookingModal({
   }, [slotGroups]);
 
   const gameOptions = useMemo(() => {
-    return GAMES.map(g => ({ value: g.name, label: `${g.name} (60m)` }));
+    return [
+      { value: '', label: '-- Select Escape Room Game --' },
+      ...GAMES.map(g => ({ value: g.name, label: `${g.name} (60m)` }))
+    ];
   }, []);
 
   const offerOptions = useMemo(() => {
@@ -713,11 +743,12 @@ export default function BookingModal({
               {/* Game Custom Dropdown */}
               <div>
                 <CustomDropdown
-                  label="Escape Room Game"
+                  label="Escape Room Game (Required)"
                   value={gameName}
                   options={gameOptions}
                   onChange={(val) => setGameName(val)}
                   icon={Tag}
+                  placeholder="-- Select Escape Room Game --"
                 />
               </div>
 

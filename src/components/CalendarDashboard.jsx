@@ -32,6 +32,8 @@ export default function CalendarDashboard({
   selectedDate,
   setSelectedDate,
   onOpenBookingModal,
+  onOpenNewBooking,
+  onOpenEditBooking,
   onOpenDetailModal,
   onDeleteBooking
 }) {
@@ -144,7 +146,11 @@ export default function CalendarDashboard({
       el.classList.add('ring-4', 'ring-blue-500');
       setTimeout(() => el.classList.remove('ring-4', 'ring-blue-500'), 2000);
     }
-    onOpenBookingModal(booking);
+    if (onOpenEditBooking) {
+      onOpenEditBooking(booking);
+    } else {
+      onOpenBookingModal(booking);
+    }
   };
 
   return (
@@ -370,7 +376,7 @@ export default function CalendarDashboard({
                     </span>
                   ) : (
                     <button
-                      onClick={() => onOpenBookingModal({ date: selectedDate, timeSlot: slot })}
+                      onClick={() => (onOpenNewBooking ? onOpenNewBooking({ date: selectedDate, timeSlot: slot }) : onOpenBookingModal({ date: selectedDate, timeSlot: slot }))}
                       className="flex items-center space-x-1 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-lg transition active:scale-95 shadow-xs"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -383,7 +389,7 @@ export default function CalendarDashboard({
                 <div className="p-4 flex-1 space-y-3">
                   {!hasBooking ? (
                     <div
-                      onClick={() => onOpenBookingModal({ date: selectedDate, timeSlot: slot })}
+                      onClick={() => (onOpenNewBooking ? onOpenNewBooking({ date: selectedDate, timeSlot: slot }) : onOpenBookingModal({ date: selectedDate, timeSlot: slot }))}
                       className="py-6 flex flex-col items-center justify-center cursor-pointer group"
                     >
                       <div className="w-10 h-10 rounded-full bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition mb-2">
@@ -498,7 +504,7 @@ export default function CalendarDashboard({
                               <Eye className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              onClick={() => onOpenBookingModal(booking)}
+                              onClick={() => (onOpenEditBooking ? onOpenEditBooking(booking) : onOpenBookingModal(booking))}
                               title="Edit / Update Payment"
                               className="p-1.5 rounded-lg text-amber-700 hover:text-amber-950 hover:bg-amber-100 transition"
                             >
