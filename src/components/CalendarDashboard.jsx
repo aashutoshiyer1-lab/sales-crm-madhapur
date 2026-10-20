@@ -370,19 +370,22 @@ export default function CalendarDashboard({
                     </span>
                   </div>
 
-                  {hasBooking ? (
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-blue-950 text-white">
-                      {filteredBookings.length} {filteredBookings.length > 1 ? 'Bookings' : 'Booked'}
-                    </span>
-                  ) : (
+                  <div className="flex items-center space-x-1.5">
+                    {hasBooking && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-950 text-white">
+                        {filteredBookings.length} {filteredBookings.length > 1 ? 'Bookings' : 'Booked'}
+                      </span>
+                    )}
                     <button
+                      type="button"
                       onClick={() => (onOpenNewBooking ? onOpenNewBooking({ date: selectedDate, timeSlot: slot }) : onOpenBookingModal({ date: selectedDate, timeSlot: slot }))}
-                      className="flex items-center space-x-1 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-lg transition active:scale-95 shadow-xs"
+                      className="flex items-center space-x-1 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded-lg transition active:scale-95 shadow-xs cursor-pointer"
+                      title="Add booking for this time slot"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>+ Book</span>
                     </button>
-                  )}
+                  </div>
                 </div>
 
                 {/* Slot Card Body */}
@@ -522,6 +525,19 @@ export default function CalendarDashboard({
                         </div>
                       );
                     })
+                  )}
+
+                  {/* Option to add multiple bookings in the exact same time slot */}
+                  {hasBooking && (
+                    <button
+                      type="button"
+                      onClick={() => (onOpenNewBooking ? onOpenNewBooking({ date: selectedDate, timeSlot: slot }) : onOpenBookingModal({ date: selectedDate, timeSlot: slot }))}
+                      className="w-full py-2 px-3 rounded-xl border-2 border-dashed border-blue-300 hover:border-blue-600 bg-blue-50/50 hover:bg-blue-100/70 text-blue-900 font-black text-xs flex items-center justify-center space-x-1.5 transition active:scale-98 cursor-pointer mt-2"
+                      title={`Book another game for ${slot}`}
+                    >
+                      <Plus className="w-4 h-4 text-blue-600" />
+                      <span>+ Add Another Booking ({slot})</span>
+                    </button>
                   )}
                 </div>
 

@@ -240,7 +240,7 @@ export default function BookingModal({
     }
   }, [date, isRateManuallyToggled]);
 
-  // Handle Offer Selection and auto-populate default reference & discount percent
+  // Handle Offer Selection and auto-populate default reference, discount percent & payment modes
   const handleOfferChange = (newOfferId) => {
     setOfferId(newOfferId);
     const selected = OFFERS.find(o => o.id === newOfferId);
@@ -255,6 +255,30 @@ export default function BookingModal({
       } else if (!selected.requiresReference && !selected.defaultReference) {
         setRefType('none');
         setCustomRefName('');
+      }
+
+      // Auto-set payment mode when prepaid online channels are selected
+      if (newOfferId === 'website_booking') {
+        const newPayments = {};
+        PAYMENT_MODES.forEach(m => {
+          newPayments[m] = m === 'Razorpay (Website Bookings)' ? pricing.finalTotal : '';
+        });
+        setPayments(newPayments);
+        setIsPending(false);
+      } else if (newOfferId === 'district_app') {
+        const newPayments = {};
+        PAYMENT_MODES.forEach(m => {
+          newPayments[m] = m === 'Prepaid by District' ? pricing.finalTotal : '';
+        });
+        setPayments(newPayments);
+        setIsPending(false);
+      } else if (newOfferId === 'activity_kids') {
+        const newPayments = {};
+        PAYMENT_MODES.forEach(m => {
+          newPayments[m] = m === 'Activity Kids' ? pricing.finalTotal : '';
+        });
+        setPayments(newPayments);
+        setIsPending(false);
       }
     }
   };
@@ -300,16 +324,32 @@ export default function BookingModal({
     );
   }, [payments]);
 
-  // Handle Split Payment input
+  // Handle Split Payment input (automatically sets matching offer if Prepaid by District, Razorpay, or Activity Kids)
   const handlePaymentChange = (mode, val) => {
     const numVal = val === '' ? '' : Math.max(0, Number(val));
     setPayments(prev => ({
       ...prev,
       [mode]: numVal
     }));
+
+    if (numVal > 0) {
+      if (mode === 'Razorpay (Website Bookings)' && offerId !== 'website_booking') {
+        setOfferId('website_booking');
+        setDiscountPercent(0);
+        setRefType('none');
+      } else if (mode === 'Prepaid by District' && offerId !== 'district_app') {
+        setOfferId('district_app');
+        setDiscountPercent(0);
+        setRefType('none');
+      } else if (mode === 'Activity Kids' && offerId !== 'activity_kids') {
+        setOfferId('activity_kids');
+        setDiscountPercent(0);
+        setRefType('none');
+      }
+    }
   };
 
-  // Quick 100% Auto Fill
+  // Quick 100% Auto Fill (automatically selects offer for Razorpay, District, or Activity Kids)
   const handleAutoFillMode = (mode) => {
     const newPayments = {};
     PAYMENT_MODES.forEach(m => {
@@ -317,6 +357,20 @@ export default function BookingModal({
     });
     setPayments(newPayments);
     setIsPending(false);
+
+    if (mode === 'Razorpay (Website Bookings)') {
+      setOfferId('website_booking');
+      setDiscountPercent(0);
+      setRefType('none');
+    } else if (mode === 'Prepaid by District') {
+      setOfferId('district_app');
+      setDiscountPercent(0);
+      setRefType('none');
+    } else if (mode === 'Activity Kids') {
+      setOfferId('activity_kids');
+      setDiscountPercent(0);
+      setRefType('none');
+    }
   };
 
   // Quick Fill Remainder

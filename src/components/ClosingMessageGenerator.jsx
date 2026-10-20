@@ -30,7 +30,8 @@ import {
   onValue,
   isFirebaseConfigured,
   CLOSING_REPORTS_PATH,
-  saveClosingReportToFirebase
+  saveClosingReportToFirebase,
+  fetchClosingReportFromFirebase
 } from '../config/firebase';
 
 /**
@@ -228,6 +229,33 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     }
   }, [closingDate]);
 
+  // On date change, also fetch latest from Firebase directly (so refresh on laptop/phone always loads latest)
+  useEffect(() => {
+    let isCancelled = false;
+    const fetchLatest = async () => {
+      try {
+        const cloudData = await fetchClosingReportFromFirebase(closingDate);
+        if (!isCancelled && cloudData) {
+          if (cloudData.closingStaff !== undefined) setClosingStaff(cloudData.closingStaff);
+          if (cloudData.customClosingStaff !== undefined) setCustomClosingStaff(cloudData.customClosingStaff);
+          if (cloudData.mummyActors !== undefined) setMummyActors(cloudData.mummyActors);
+          if (cloudData.excessAmount !== undefined) setExcessAmount(cloudData.excessAmount);
+          if (cloudData.shortAmount !== undefined) setShortAmount(cloudData.shortAmount);
+          if (cloudData.closingNote !== undefined) setClosingNote(cloudData.closingNote);
+          if (cloudData.manualDiscountEntries !== undefined) setManualDiscountEntries(cloudData.manualDiscountEntries);
+          if (cloudData.isEditMessageMode !== undefined) setIsEditMessageMode(cloudData.isEditMessageMode);
+          if (cloudData.customFullMessage !== undefined) setCustomFullMessage(cloudData.customFullMessage);
+          if (cloudData.printNotesText !== undefined) setPrintNotesText(cloudData.printNotesText);
+          if (cloudData.isPrintNotesCustomized !== undefined) setIsPrintNotesCustomized(cloudData.isPrintNotesCustomized);
+        }
+      } catch (err) {
+        console.warn("Direct fetchClosingReportFromFirebase notice:", err);
+      }
+    };
+    fetchLatest();
+    return () => { isCancelled = true; };
+  }, [closingDate]);
+
   // Real-time synchronization & persistence (LocalStorage + Firebase RTDB)
   useEffect(() => {
     const payload = {
@@ -349,6 +377,33 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       return `${parts[2]}-${parts[1]}-${parts[0]}`;
     }
     return closingDate;
+  }, [closingDate]);
+
+  // On date change, also fetch latest from Firebase directly (so refresh on laptop/phone always loads latest)
+  useEffect(() => {
+    let isCancelled = false;
+    const fetchLatest = async () => {
+      try {
+        const cloudData = await fetchClosingReportFromFirebase(closingDate);
+        if (!isCancelled && cloudData) {
+          if (cloudData.closingStaff !== undefined) setClosingStaff(cloudData.closingStaff);
+          if (cloudData.customClosingStaff !== undefined) setCustomClosingStaff(cloudData.customClosingStaff);
+          if (cloudData.mummyActors !== undefined) setMummyActors(cloudData.mummyActors);
+          if (cloudData.excessAmount !== undefined) setExcessAmount(cloudData.excessAmount);
+          if (cloudData.shortAmount !== undefined) setShortAmount(cloudData.shortAmount);
+          if (cloudData.closingNote !== undefined) setClosingNote(cloudData.closingNote);
+          if (cloudData.manualDiscountEntries !== undefined) setManualDiscountEntries(cloudData.manualDiscountEntries);
+          if (cloudData.isEditMessageMode !== undefined) setIsEditMessageMode(cloudData.isEditMessageMode);
+          if (cloudData.customFullMessage !== undefined) setCustomFullMessage(cloudData.customFullMessage);
+          if (cloudData.printNotesText !== undefined) setPrintNotesText(cloudData.printNotesText);
+          if (cloudData.isPrintNotesCustomized !== undefined) setIsPrintNotesCustomized(cloudData.isPrintNotesCustomized);
+        }
+      } catch (err) {
+        console.warn("Direct fetchClosingReportFromFirebase notice:", err);
+      }
+    };
+    fetchLatest();
+    return () => { isCancelled = true; };
   }, [closingDate]);
 
   // Two-digit pad helper
@@ -968,29 +1023,66 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                   />
                 </div>
 
-                {/* Discount % */}
-                <div>
-                  <label className="block text-[10px] font-black text-blue-950 mb-1">Discount %:</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={newDiscPercent}
-                    onChange={(e) => setNewDiscPercent(Math.min(100, Math.max(0, parseInt(e.target.value, 10) || 0)))}
-                    className="w-full bg-white border-2 border-blue-300 rounded-xl px-2.5 py-1.5 text-center font-mono font-black text-xs text-slate-950 outline-none"
-                  />
+                {/* Discount % with Quick Buttons: 10, 15, 20, 30 */}
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-black text-blue-950 mb-1">Select Discount %:</label>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {[10, 15, 20, 30].map(pct => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => setNewDiscPercent(pct)}
+                        className={`px-2 py-0.5 rounded-lg text-xs font-black transition cursor-pointer ${
+                          Number(newDiscPercent) === pct
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-white border-2 border-blue-200 text-blue-900 hover:bg-blue-100'
+                        }`}
+                      >
+                        {pct}%
+                      </button>
+                    ))}
+                    <div className="flex items-center space-x-1 bg-white border-2 border-blue-300 rounded-lg px-2 py-0.5">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={newDiscPercent}
+                        onChange={(e) => setNewDiscPercent(Math.min(100, Math.max(0, parseInt(e.target.value, 10) || 0)))}
+                        className="w-10 text-center font-mono font-black text-xs text-slate-950 outline-none"
+                      />
+                      <span className="text-[10px] font-bold text-slate-600">%</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Reference */}
                 <div className="col-span-2">
                   <label className="block text-[10px] font-black text-blue-950 mb-1">Approval Reference:</label>
-                  <input
-                    type="text"
-                    value={newDiscRef}
-                    onChange={(e) => setNewDiscRef(e.target.value)}
-                    placeholder="Khaja Sir"
-                    className="w-full bg-white border-2 border-blue-300 rounded-xl px-2.5 py-1.5 text-xs font-black text-slate-950 outline-none"
-                  />
+                  <div className="flex items-center space-x-2">
+                    <select
+                      value={newDiscRef === 'Khaja Sir' ? 'Khaja Sir' : 'custom'}
+                      onChange={(e) => {
+                        if (e.target.value === 'Khaja Sir') {
+                          setNewDiscRef('Khaja Sir');
+                        } else {
+                          setNewDiscRef('');
+                        }
+                      }}
+                      className="bg-white border-2 border-blue-300 rounded-xl px-2 py-1 text-xs font-black text-slate-950 outline-none cursor-pointer"
+                    >
+                      <option value="Khaja Sir">Khaja Sir</option>
+                      <option value="custom">+ Specific Name</option>
+                    </select>
+                    {newDiscRef !== 'Khaja Sir' && (
+                      <input
+                        type="text"
+                        value={newDiscRef}
+                        onChange={(e) => setNewDiscRef(e.target.value)}
+                        placeholder="Type name..."
+                        className="flex-1 bg-white border-2 border-blue-300 rounded-xl px-2 py-1 text-xs font-black text-slate-950 outline-none"
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
 

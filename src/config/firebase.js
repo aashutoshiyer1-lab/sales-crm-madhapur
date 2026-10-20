@@ -69,6 +69,36 @@ export const saveClosingReportToFirebase = async (date, reportData) => {
 };
 
 /**
+ * Fetch Closing Report data from Firebase (SDK + REST fallback)
+ */
+export const fetchClosingReportFromFirebase = async (date) => {
+  if (!date) return null;
+  if (rtdb && isFirebaseConfigured()) {
+    try {
+      const reportRef = ref(rtdb, `${CLOSING_REPORTS_PATH}/${date}`);
+      const snapshot = await get(reportRef);
+      if (snapshot.exists()) {
+        return snapshot.val();
+      }
+    } catch (e) {
+      console.warn("RTDB get notice for closing report:", e);
+    }
+  }
+
+  // Fallback REST fetch
+  try {
+    const res = await fetch(`${RTDB_BASE_URL}/${CLOSING_REPORTS_PATH}/${date}.json`);
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
+  } catch (e) {
+    console.warn("REST fetch notice for closing report:", e);
+  }
+  return null;
+};
+
+/**
  * Fetch bookings directly via REST API (Guaranteed fallback)
  */
 export const fetchBookingsFromREST = async () => {
