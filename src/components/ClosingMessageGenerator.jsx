@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   MessageSquare,
   Copy,
@@ -16,29 +16,105 @@ import {
 } from 'lucide-react';
 import { getPaidTotal } from '../utils/pricingEngine';
 import { STAFF_ROSTER } from '../config/venueData';
+import {
+  rtdb,
+  ref,
+  onValue,
+  isFirebaseConfigured,
+  CLOSING_REPORTS_PATH,
+  saveClosingReportToFirebase
+} from '../config/firebase';
+
+const getInitialClosingData = (targetDate) => {
+  try {
+    const raw = localStorage.getItem(`escapetime_madhapur_closing_${targetDate}`);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.warn("Error reading closing storage", e);
+  }
+  return null;
+};
 
 export default function ClosingMessageGenerator({ bookings, selectedDate, setSelectedDate }) {
   const [closingDate, setClosingDate] = useState(
     selectedDate || new Date().toISOString().split('T')[0]
   );
 
+  const initialSaved = useMemo(() => getInitialClosingData(closingDate), [closingDate]);
+
   // Closing Staff Name (at bottom of message)
-  const [closingStaff, setClosingStaff] = useState("Bhavani");
-  const [customClosingStaff, setCustomClosingStaff] = useState("");
+  const [closingStaff, setClosingStaff] = useState(initialSaved?.closingStaff || "Bhavani");
+  const [customClosingStaff, setCustomClosingStaff] = useState(initialSaved?.customClosingStaff || "");
 
   // Mummy staff tracker: Array of { name: string, count: number }
-  const [mummyActors, setMummyActors] = useState([
-    { name: "Prudhvi", count: 2 }
-  ]);
+  const [mummyActors, setMummyActors] = useState(
+    initialSaved?.mummyActors || [{ name: "Prudhvi", count: 2 }]
+  );
   const [newActorName, setNewActorName] = useState("");
   const [newActorCount, setNewActorCount] = useState(1);
 
   // Excess, Short & Note fields
-  const [excessAmount, setExcessAmount] = useState("00");
-  const [shortAmount, setShortAmount] = useState("00");
-  const [closingNote, setClosingNote] = useState("");
+  const [excessAmount, setExcessAmount] = useState(initialSaved?.excessAmount || "00");
+  const [shortAmount, setShortAmount] = useState(initialSaved?.shortAmount || "00");
+  const [closingNote, setClosingNote] = useState(initialSaved?.closingNote || "");
 
   const [copiedStatus, setCopiedStatus] = useState(false);
+
+  // Sync state when closing date changes (load from LocalStorage)
+  useEffect(() => {
+    const saved = getInitialClosingData(closingDate);
+    if (saved) {
+      setClosingStaff(saved.closingStaff || "Bhavani");
+      setCustomClosingStaff(saved.customClosingStaff || "");
+      setMummyActors(saved.mummyActors || [{ name: "Prudhvi", count: 2 }]);
+      setExcessAmount(saved.excessAmount || "00");
+      setShortAmount(saved.shortAmount || "00");
+      setClosingNote(saved.closingNote || "");
+    }
+  }, [closingDate]);
+
+  // Real-time synchronization & persistence (LocalStorage + Firebase RTDB)
+  useEffect(() => {
+    const payload = {
+      closingStaff,
+      customClosingStaff,
+      mummyActors,
+      excessAmount,
+      shortAmount,
+      closingNote,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      localStorage.setItem(`escapetime_madhapur_closing_${closingDate}`, JSON.stringify(payload));
+    } catch (e) {
+      console.warn("Failed saving closing to localStorage:", e);
+    }
+
+    saveClosingReportToFirebase(closingDate, payload);
+  }, [closingDate, closingStaff, customClosingStaff, mummyActors, excessAmount, shortAmount, closingNote]);
+
+  // Real-time remote listener from Firebase RTDB (cross-tab / multi-device sync)
+  useEffect(() => {
+    if (!rtdb || !isFirebaseConfigured() || !closingDate) return;
+    try {
+      const reportRef = ref(rtdb, `${CLOSING_REPORTS_PATH}/${closingDate}`);
+      const unsubscribe = onValue(reportRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          if (data.closingStaff !== undefined) setClosingStaff(data.closingStaff);
+          if (data.customClosingStaff !== undefined) setCustomClosingStaff(data.customClosingStaff);
+          if (data.mummyActors !== undefined) setMummyActors(data.mummyActors);
+          if (data.excessAmount !== undefined) setExcessAmount(data.excessAmount);
+          if (data.shortAmount !== undefined) setShortAmount(data.shortAmount);
+          if (data.closingNote !== undefined) setClosingNote(data.closingNote);
+        }
+      });
+      return () => unsubscribe();
+    } catch (err) {
+      console.warn("RTDB closing listener error:", err);
+    }
+  }, [closingDate]);
 
   // Filter bookings for selected closing date
   const dayBookings = useMemo(() => {
@@ -210,8 +286,51 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
 
     // Note
     lines.push(`*NOTE:-*`);
-    if (closingNote.trim()) {
-      lines.push(closingNote.trim());
+
+    const noteBlocks = [];
+
+    // Filter day bookings that have an offer/discount or a custom note
+    const discountOrNoteBookings = dayBookings.filter(b => {
+      const hasOffer = b.offerId && b.offerId !== 'none' && (b.discountPercent > 0 || b.discountAmount > 0);
+      const hasReason = !!(b.customDiscountReason && b.customDiscountReason.trim());
+      const hasCustomNote = !!(b.customNote && b.customNote.trim());
+      const hasNotes = !!(b.notes && b.notes.trim());
+      return hasOffer || hasReason || hasCustomNote || hasNotes;
+    });
+
+    discountOrNoteBookings.forEach(b => {
+      const blockLines = [];
+      const offerLabel = (b.offerName && b.offerId !== 'none')
+        ? b.offerName
+        : (b.gameName ? `${b.gameName} Booking` : 'Booking');
+      blockLines.push(`• *${offerLabel}*`);
+
+      const rawNote = (b.customDiscountReason || b.customNote || b.notes || '').trim();
+      const isNone = !rawNote || /^(\s*note\s*:?\s*)?none\s*$/i.test(rawNote) || /^no\s*discount$/i.test(rawNote);
+
+      if (!isNone) {
+        // Populate the custom note on the next line with proper grammar
+        const formattedNote = /^note\s*:/i.test(rawNote) ? rawNote : `Note: ${rawNote}`;
+        blockLines.push(formattedNote);
+      }
+
+      // Immediately below the custom note for that customer, populate their details formatted as:
+      // Customer Name: <CUSTOMER_NAME>
+      // Mobile Number: <PHONE_NUMBER>
+      blockLines.push(`Customer Name: ${b.customerName || 'N/A'}`);
+      blockLines.push(`Mobile Number: ${b.customerPhone || 'N/A'}`);
+
+      noteBlocks.push(blockLines.join('\n'));
+    });
+
+    // Manual Staff Closing Notes (if any, never print "None")
+    const cleanManualNote = closingNote.trim();
+    if (cleanManualNote && !/^(\s*note\s*:?\s*)?none\s*$/i.test(cleanManualNote)) {
+      noteBlocks.push(cleanManualNote);
+    }
+
+    if (noteBlocks.length > 0) {
+      lines.push(noteBlocks.join('\n\n'));
     }
     lines.push(``);
 
@@ -227,7 +346,8 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     excessAmount,
     shortAmount,
     closingNote,
-    finalStaffName
+    finalStaffName,
+    dayBookings
   ]);
 
   // Copy to Clipboard

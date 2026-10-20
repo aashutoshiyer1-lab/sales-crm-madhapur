@@ -24,6 +24,7 @@ import {
   parseTimeToMinutes,
   formatTime24h,
   getPlayerCategory,
+  isComplimentaryBooking,
   BRANCH_INFO
 } from '../config/venueData';
 import { formatCurrency, getPaidTotal } from '../utils/pricingEngine';
@@ -122,11 +123,12 @@ export default function SalesDashboard({
     });
   }, [filteredByDate, searchQuery, selectedPaymentMode]);
 
-  // Aggregate Metrics for current filtered set
+  // Aggregate Metrics for current filtered set with Paid vs. Complimentary Games Split
   const metrics = useMemo(() => {
     let totalRevenue = 0;
     let totalPlayers = 0;
-    let totalGames = 0;
+    let paidGames = 0;
+    let complimentaryGames = 0;
     let pendingCount = 0;
     let pendingAmount = 0;
 
@@ -135,14 +137,24 @@ export default function SalesDashboard({
 
     searchedAndFiltered.forEach(b => {
       const paid = getPaidTotal(b.payments);
-      totalRevenue += paid;
+      const isComplimentary = isComplimentaryBooking(b);
+      const isPending = b.isPending || b.paymentStatus === 'pending';
+
+      // Keep complimentary games strictly excluded from revenue calculations
+      if (!isComplimentary) {
+        totalRevenue += paid;
+      }
       totalPlayers += Number(b.players) || 0;
 
-      if (b.isPending || b.paymentStatus === 'pending') {
+      if (isPending) {
         pendingCount += 1;
         pendingAmount += Math.max(0, (Number(b.finalTotal) || 0) - paid);
       } else {
-        totalGames += 1;
+        if (isComplimentary) {
+          complimentaryGames += 1;
+        } else {
+          paidGames += 1;
+        }
       }
 
       if (b.payments) {
@@ -157,7 +169,9 @@ export default function SalesDashboard({
     return {
       totalRevenue,
       totalPlayers,
-      totalGames,
+      paidGames,
+      complimentaryGames,
+      totalGames: paidGames + complimentaryGames,
       pendingCount,
       pendingAmount,
       modeTotals
@@ -173,7 +187,7 @@ export default function SalesDashboard({
     lines.push(`SALES REPORT (24H TIME): ${BRANCH_INFO.name}`);
     lines.push(`Filter: ${dateFilter} | Total Records: ${searchedAndFiltered.length}`);
     lines.push(`Total Net Revenue: ${formatCurrency(metrics.totalRevenue)}`);
-    lines.push(`Total Players: ${metrics.totalPlayers} | Confirmed Games: ${metrics.totalGames}`);
+    lines.push(`Total Players: ${metrics.totalPlayers} | Games: ${metrics.paidGames} (+${metrics.complimentaryGames} Compl.) = ${metrics.totalGames} Total`);
     lines.push(`=====================================================`);
     lines.push(``);
 
@@ -193,6 +207,9 @@ export default function SalesDashboard({
       lines.push(`   Breakdown: ${breakdown}`);
       if (b.offerName && b.offerId !== 'none') {
         lines.push(`   Discount: ${b.offerName} (-₹${b.discountAmount || 0})`);
+      }
+      if (b.customDiscountReason || b.customNote) {
+        lines.push(`   Offer Note: ${b.customDiscountReason || b.customNote}`);
       }
       if (b.reference) {
         lines.push(`   Ref: ${b.reference}`);
@@ -229,6 +246,7 @@ export default function SalesDashboard({
       'Rate Per Player (₹)',
       'Base Total (₹)',
       'Offer Applied',
+      'Offer Note / Reason',
       'Discount (₹)',
       'Final Total (₹)',
       'Status',
@@ -263,6 +281,7 @@ export default function SalesDashboard({
         b.ratePerPlayer || 0,
         b.baseTotal || 0,
         `"${b.offerName || 'None'}"`,
+        `"${(b.customDiscountReason || b.customNote || '').replace(/"/g, '""')}"`,
         b.discountAmount || 0,
         b.finalTotal || paid,
         `"${b.isPending ? 'Pending' : 'Confirmed'}"`,
@@ -393,17 +412,17 @@ export default function SalesDashboard({
           </p>
         </div>
 
-        {/* Total Games */}
+        {/* Total Games with Paid vs. Complimentary split */}
         <div className="bg-white p-5 rounded-2xl border-2 border-blue-200 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-black uppercase text-blue-900 tracking-wider">Completed Games</span>
             <Gamepad2 className="w-5 h-5 text-blue-600" />
           </div>
           <p className="text-2xl sm:text-3xl font-black text-slate-950 font-mono mt-1">
-            {metrics.totalGames}
+            {metrics.paidGames} <span className="text-base sm:text-lg text-blue-700 font-bold">(+{metrics.complimentaryGames} Compl.)</span>
           </p>
           <p className="text-xs font-bold text-slate-500 mt-1">
-            Confirmed sessions
+            Total: {metrics.paidGames + metrics.complimentaryGames} games ({metrics.paidGames} paid + {metrics.complimentaryGames} complimentary)
           </p>
         </div>
 
@@ -653,6 +672,12 @@ export default function SalesDashboard({
                             </span>
                           ) : (
                             <span className="text-xs font-medium text-slate-400">Standard</span>
+                          )}
+
+                          {(booking.customDiscountReason || booking.customNote) && (
+                            <span className="px-2 py-0.5 rounded text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-300 italic">
+                              📝 Reason: {booking.customDiscountReason || booking.customNote}
+                            </span>
                           )}
 
                           {booking.reference && (

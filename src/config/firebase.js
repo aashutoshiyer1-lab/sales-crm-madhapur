@@ -39,6 +39,34 @@ export { app, rtdb, ref, onValue, set, remove, get };
 
 // RTDB Node path for Madhapur branch
 export const BOOKINGS_PATH = 'madhapur/bookings';
+export const CLOSING_REPORTS_PATH = 'madhapur/closingReports';
+
+/**
+ * Save Closing Report data to Firebase (SDK + REST fallback)
+ */
+export const saveClosingReportToFirebase = async (date, reportData) => {
+  if (!date) return;
+  if (rtdb && isFirebaseConfigured()) {
+    try {
+      const reportRef = ref(rtdb, `${CLOSING_REPORTS_PATH}/${date}`);
+      await set(reportRef, reportData);
+      return;
+    } catch (err) {
+      console.warn("RTDB SDK closing report write notice, falling back to REST:", err);
+    }
+  }
+
+  // Fallback REST write
+  try {
+    await fetch(`${RTDB_BASE_URL}/${CLOSING_REPORTS_PATH}/${date}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reportData)
+    });
+  } catch (err) {
+    console.warn("Failed REST write for closing report:", err);
+  }
+};
 
 /**
  * Fetch bookings directly via REST API (Guaranteed fallback)

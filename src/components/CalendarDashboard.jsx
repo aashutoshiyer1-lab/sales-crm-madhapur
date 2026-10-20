@@ -20,6 +20,8 @@ import {
 import {
   generateTimeSlots,
   isWeekend,
+  parseTimeToMinutes,
+  isComplimentaryBooking,
   MODES_REQUIRING_SCREENSHOT,
   GAMES
 } from '../config/venueData';
@@ -34,17 +36,39 @@ export default function CalendarDashboard({
   onDeleteBooking
 }) {
   const [selectedGameFilter, setSelectedGameFilter] = useState('ALL');
+  const [showExtendedSlots, setShowExtendedSlots] = useState(false);
 
   // Check if selected date is weekend
   const weekendStatus = useMemo(() => isWeekend(selectedDate), [selectedDate]);
-
-  // Generate 15-minute time slots for this date based on operating hours (12-hour format)
-  const allSlots = useMemo(() => generateTimeSlots(weekendStatus), [weekendStatus]);
 
   // Filter bookings for the selected date
   const dateBookings = useMemo(() => {
     return bookings.filter(b => b.date === selectedDate);
   }, [bookings, selectedDate]);
+
+  // Check if any late-night booking exists on this day (past standard closing: 10 PM weekdays, 11 PM weekends)
+  const hasLateNightBooking = useMemo(() => {
+    const closingMinutes = weekendStatus ? (23 * 60) : (22 * 60);
+    return dateBookings.some(b => {
+      if (!b.timeSlot) return false;
+      const mins = parseTimeToMinutes(b.timeSlot);
+      return mins > closingMinutes;
+    });
+  }, [dateBookings, weekendStatus]);
+
+  const shouldExpandGrid = hasLateNightBooking || showExtendedSlots;
+
+  // Generate 15-minute time slots for this date (auto-expands to 1:00 AM if late booking exists)
+  const allSlots = useMemo(() => {
+    const baseSlots = generateTimeSlots(weekendStatus, shouldExpandGrid);
+    // Include any custom walk-in slots that exist in dateBookings so all bookings remain clearly visible!
+    const customSlots = dateBookings
+      .map(b => b.timeSlot)
+      .filter(s => s && !baseSlots.includes(s));
+    
+    const combined = Array.from(new Set([...baseSlots, ...customSlots]));
+    return combined.sort((a, b) => parseTimeToMinutes(a) - parseTimeToMinutes(b));
+  }, [weekendStatus, shouldExpandGrid, dateBookings]);
 
   // Map bookings by time slot for quick lookup
   const bookingsBySlot = useMemo(() => {
@@ -61,25 +85,39 @@ export default function CalendarDashboard({
     return dateBookings.filter(b => b.isPending || b.paymentStatus === 'pending');
   }, [dateBookings]);
 
-  // Daily Metrics Calculation
+  // Daily Metrics Calculation with Paid vs. Complimentary Games Split
   const dailyMetrics = useMemo(() => {
     let totalRevenue = 0;
     let totalPlayers = 0;
-    let confirmedGames = 0;
+    let paidGames = 0;
+    let complimentaryGames = 0;
 
     dateBookings.forEach(b => {
       const paid = getPaidTotal(b.payments);
-      totalRevenue += paid;
+      const isComplimentary = isComplimentaryBooking(b);
+      const isPending = b.isPending || b.paymentStatus === 'pending';
+
+      // Keep complimentary games strictly excluded from revenue calculations
+      if (!isComplimentary) {
+        totalRevenue += paid;
+      }
       totalPlayers += Number(b.players) || 0;
-      if (!b.isPending && b.paymentStatus !== 'pending' && b.offerId !== 'complimentary') {
-        confirmedGames += 1;
+
+      if (!isPending) {
+        if (isComplimentary) {
+          complimentaryGames += 1;
+        } else {
+          paidGames += 1;
+        }
       }
     });
 
     return {
       revenue: totalRevenue,
       players: totalPlayers,
-      games: confirmedGames,
+      paidGames,
+      complimentaryGames,
+      totalGames: paidGames + complimentaryGames,
       totalSlotsBooked: dateBookings.length,
       pendingCount: pendingEntries.length
     };
@@ -241,10 +279,10 @@ export default function CalendarDashboard({
             <Gamepad2 className="w-5 h-5 text-blue-600" />
           </div>
           <p className="text-2xl sm:text-3xl font-black text-slate-950 font-mono mt-1">
-            {dailyMetrics.games}
+            {dailyMetrics.paidGames} <span className="text-base sm:text-lg text-blue-700 font-bold">(+{dailyMetrics.complimentaryGames} Compl.)</span>
           </p>
           <p className="text-[11px] font-bold text-slate-500 mt-1">
-            Completed / Paid sessions
+            Total: {dailyMetrics.paidGames + dailyMetrics.complimentaryGames} games ({dailyMetrics.paidGames} paid + {dailyMetrics.complimentaryGames} complimentary)
           </p>
         </div>
 
@@ -269,7 +307,7 @@ export default function CalendarDashboard({
 
       {/* Responsive 15-Minute Slot Grid */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <h2 className="text-lg sm:text-xl font-black text-slate-950 tracking-tight flex items-center space-x-2">
             <Clock className="w-5 h-5 text-blue-600" />
             <span>15-Minute Schedule Intervals (12-Hour Format)</span>
@@ -277,6 +315,22 @@ export default function CalendarDashboard({
               {allSlots.length} slots
             </span>
           </h2>
+          <button
+            type="button"
+            onClick={() => setShowExtendedSlots(prev => !prev)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-black border transition flex items-center space-x-1.5 ${
+              shouldExpandGrid
+                ? 'bg-blue-600 text-white border-blue-700 shadow-xs'
+                : 'bg-white text-blue-900 border-blue-300 hover:bg-blue-50'
+            }`}
+          >
+            <span>🌙 {shouldExpandGrid ? 'Late Night Grid (Till 1 AM Active)' : 'Show Late Night Slots (Till 1 AM)'}</span>
+            {hasLateNightBooking && (
+              <span className="bg-amber-400 text-slate-950 px-1.5 py-0.2 text-[10px] rounded-full font-black">
+                Late Booking Active
+              </span>
+            )}
+          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
@@ -384,11 +438,16 @@ export default function CalendarDashboard({
                             )}
                           </div>
 
-                          {/* Offer & Reference Badges */}
+                          {/* Offer, Custom Reason & Reference Badges */}
                           <div className="flex flex-wrap gap-1">
                             {booking.offerName && booking.offerId !== 'none' && (
                               <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
                                 {booking.offerName}
+                              </span>
+                            )}
+                            {(booking.customDiscountReason || booking.customNote) && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300 italic">
+                                📝 Note: {booking.customDiscountReason || booking.customNote}
                               </span>
                             )}
                             {booking.reference && (
@@ -397,6 +456,12 @@ export default function CalendarDashboard({
                               </span>
                             )}
                           </div>
+
+                          {booking.notes && (
+                            <p className="text-[10px] text-slate-500 italic">
+                              "{booking.notes}"
+                            </p>
+                          )}
 
                           {/* Payment Status & Breakdown */}
                           <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">

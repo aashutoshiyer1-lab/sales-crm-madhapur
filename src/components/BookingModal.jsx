@@ -24,6 +24,7 @@ import {
   PAYMENT_MODES,
   MODES_REQUIRING_SCREENSHOT,
   generateTimeSlots,
+  getTimeSlotGroups,
   isWeekend,
   getPlayerCategory
 } from '../config/venueData';
@@ -115,16 +116,25 @@ export default function BookingModal({
   const [customerPhone, setCustomerPhone] = useState(bookingToEdit?.customerPhone || '');
   const [notes, setNotes] = useState(bookingToEdit?.notes || '');
 
-  // 2. Schedule Timing (Date & 12-Hour 15-Min Slot)
+  // 2. Schedule Timing (Date & 12-Hour 15-Min Slot with Extended Slots up to 1 AM)
   const [date, setDate] = useState(
     bookingToEdit?.date || defaultDate || new Date().toISOString().split('T')[0]
   );
 
   const weekendStatus = useMemo(() => isWeekend(date), [date]);
-  const availableSlots = useMemo(() => generateTimeSlots(weekendStatus), [weekendStatus]);
+  const slotGroups = useMemo(() => getTimeSlotGroups(weekendStatus), [weekendStatus]);
+
+  // Support typing a custom walk-in time (e.g., 10:40 PM or 12:35 AM)
+  const [isCustomTime, setIsCustomTime] = useState(() => {
+    if (bookingToEdit?.timeSlot) {
+      const initialGroups = getTimeSlotGroups(isWeekend(bookingToEdit.date || defaultDate));
+      return !initialGroups.all.includes(bookingToEdit.timeSlot);
+    }
+    return false;
+  });
 
   const [timeSlot, setTimeSlot] = useState(
-    bookingToEdit?.timeSlot || defaultSlot || availableSlots[0] || '11:00 AM'
+    bookingToEdit?.timeSlot || defaultSlot || slotGroups.standard[0] || '11:00 AM'
   );
 
   // 3. Game & Pricing Selection
@@ -137,6 +147,11 @@ export default function BookingModal({
     bookingToEdit?.players ? bookingToEdit.players : ''
   );
   const [offerId, setOfferId] = useState(bookingToEdit?.offerId || 'none');
+
+  // Custom Reason / Note for Any Offer or Discount
+  const [customDiscountReason, setCustomDiscountReason] = useState(
+    bookingToEdit?.customDiscountReason || bookingToEdit?.customNote || ''
+  );
 
   // Approval Reference (Only Khaja Sir or Custom Name)
   const initialRef = bookingToEdit?.reference || '';
@@ -173,12 +188,14 @@ export default function BookingModal({
     return '7+';
   }, [players]);
 
-  // Sync timeSlot if available slots change
+  // Sync timeSlot if available slots change, BUT NEVER overwrite custom walk-in time when changing dates!
   useEffect(() => {
-    if (availableSlots.length > 0 && !availableSlots.includes(timeSlot)) {
-      setTimeSlot(availableSlots[0]);
+    if (!isCustomTime) {
+      if (slotGroups.all.length > 0 && !slotGroups.all.includes(timeSlot)) {
+        setTimeSlot(slotGroups.standard[0] || '11:00 AM');
+      }
     }
-  }, [date, availableSlots]);
+  }, [date, isCustomTime, slotGroups]);
 
   // Pricing calculation
   const pricing = useMemo(() => {
@@ -291,6 +308,8 @@ export default function BookingModal({
     const isFullyPaid = paidTotal >= pricing.finalTotal && pricing.finalTotal > 0;
     const shouldMarkPending = isPending || (!isFullyPaid && pricing.finalTotal > 0);
 
+    const trimmedCustomReason = customDiscountReason.trim();
+
     const bookingData = {
       id: bookingToEdit?.id || `ETM-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       createdAt: bookingToEdit?.createdAt || new Date().toISOString(),
@@ -304,6 +323,8 @@ export default function BookingModal({
       baseTotal: pricing.baseTotal,
       offerId,
       offerName: selectedOfferObj ? selectedOfferObj.name : 'None',
+      customDiscountReason: trimmedCustomReason,
+      customNote: trimmedCustomReason || notes.trim(),
       discountPercent: pricing.discountPercent,
       discountAmount: pricing.discountAmount,
       finalTotal: pricing.finalTotal,
@@ -322,8 +343,8 @@ export default function BookingModal({
 
   // Options for custom dropdowns
   const slotOptions = useMemo(() => {
-    return availableSlots.map(s => ({ value: s, label: s }));
-  }, [availableSlots]);
+    return slotGroups.all.map(s => ({ value: s, label: s }));
+  }, [slotGroups]);
 
   const gameOptions = useMemo(() => {
     return GAMES.map(g => ({ value: g.name, label: `${g.name} (60m)` }));
@@ -490,15 +511,58 @@ export default function BookingModal({
                 </div>
               </div>
 
-              {/* Custom Blue Time Slot Dropdown (Zero Gray Hover!) */}
+              {/* 15-Minute Time Slot with Extended Slots up to 1 AM & Custom Time Toggle */}
               <div>
-                <CustomDropdown
-                  label="15-Minute Time Slot (12-Hour Format)"
-                  value={timeSlot}
-                  options={slotOptions}
-                  onChange={(val) => setTimeSlot(val)}
-                  icon={Clock}
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-black text-blue-950 flex items-center space-x-1">
+                    <Clock className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Time Slot (12-Hour Format)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomTime(prev => !prev)}
+                    className={`px-2.5 py-0.5 rounded-lg text-xs font-black border transition ${
+                      isCustomTime
+                        ? 'bg-blue-600 text-white border-blue-700 shadow-xs'
+                        : 'bg-blue-50 text-blue-900 border-blue-300 hover:bg-blue-100'
+                    }`}
+                  >
+                    {isCustomTime ? '✓ Custom Time Active' : '✎ Custom Time'}
+                  </button>
+                </div>
+
+                {isCustomTime ? (
+                  <div className="flex items-center space-x-2 bg-white border-2 border-blue-400 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 rounded-xl px-3 py-2.5 transition">
+                    <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 10:40 PM or 12:35 AM"
+                      value={timeSlot}
+                      onChange={(e) => setTimeSlot(e.target.value)}
+                      className="bg-white font-black font-mono text-slate-950 outline-none w-full text-sm placeholder:text-slate-400"
+                    />
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <select
+                      value={timeSlot}
+                      onChange={(e) => setTimeSlot(e.target.value)}
+                      className="w-full bg-white border-2 border-blue-300 hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 rounded-xl px-3 py-2.5 font-black font-mono text-slate-950 text-sm outline-none cursor-pointer shadow-xs transition"
+                    >
+                      <optgroup label="Standard Operating Hours">
+                        {slotGroups.standard.map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="🌙 Extended / Late Night Slots (Till 1 AM)">
+                        {slotGroups.extended.map(s => (
+                          <option key={s} value={s}>{s} (Late Night)</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -682,6 +746,30 @@ export default function BookingModal({
                 />
               </div>
             </div>
+
+            {/* Custom Reason / Note for Any Offer or Discount */}
+            {offerId !== 'none' && (
+              <div className="p-3.5 bg-amber-50 rounded-2xl border-2 border-amber-300 space-y-1.5 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-black text-amber-950 flex items-center space-x-1.5">
+                    <Tag className="w-4 h-4 text-amber-700" />
+                    <span>Custom Note / Reason for Discount ({OFFERS.find(o => o.id === offerId)?.name || 'Offer'}):</span>
+                  </label>
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                    Optional • Carries to Sales & Closing Report
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2 bg-white border-2 border-amber-300 focus-within:border-amber-600 rounded-xl px-3 py-2 transition shadow-xs">
+                  <input
+                    type="text"
+                    placeholder="e.g. Website Booking ID, Birthday ID verified, Corporate group, Cross-promo voucher..."
+                    value={customDiscountReason}
+                    onChange={(e) => setCustomDiscountReason(e.target.value)}
+                    className="bg-white font-bold text-slate-950 text-xs sm:text-sm outline-none w-full placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Custom Reference Name Input if selected */}
             {refType === 'custom' && (

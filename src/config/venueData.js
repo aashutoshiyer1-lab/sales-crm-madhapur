@@ -103,54 +103,69 @@ export const OPERATING_HOURS = {
     startHour: 11, // 11:00 AM
     startMin: 0,
     endHour: 22,   // 10:00 PM (22:00)
-    endMin: 0
+    endMin: 0,
+    extendedEndHour: 25, // 1:00 AM (25:00 next day)
+    extendedEndMin: 0
   },
   weekend: {
     startHour: 10, // 10:30 AM
     startMin: 30,
     endHour: 23,   // 11:00 PM (23:00)
-    endMin: 0
+    endMin: 0,
+    extendedEndHour: 25, // 1:00 AM (25:00 next day)
+    extendedEndMin: 0
   }
 };
 
 /**
- * Format hours & minutes to 12-hour AM/PM string (e.g. 11:15 AM)
+ * Format hours & minutes to 12-hour AM/PM string (e.g. 11:15 AM, 12:00 AM, 1:00 AM)
+ * Properly normalizes late-night hours >= 24 (24:00 -> 12:00 AM, 25:00 -> 1:00 AM)
  */
 export const formatTime12h = (hour, minute) => {
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  const normalizedHour = hour % 24;
+  const period = (normalizedHour >= 12 && normalizedHour < 24) ? 'PM' : 'AM';
+  const displayHour = normalizedHour % 12 === 0 ? 12 : normalizedHour % 12;
   const displayMin = minute.toString().padStart(2, '0');
   return `${displayHour}:${displayMin} ${period}`;
 };
 
 /**
- * Convert 12-hour string (e.g. "11:15 AM", "02:30 PM") into 24-hour format ("11:15", "14:30")
+ * Convert 12-hour string (e.g. "11:15 AM", "12:00 AM", "01:00 AM") into 24-hour format ("11:15", "00:00", "01:00")
  * Specially needed for Sales & Reports physical ledger logging!
  */
-export const formatTime24h = (time12h) => {
-  if (!time12h) return '';
-  const match = time12h.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!match) return time12h;
+export const formatTime24h = (timeStr) => {
+  if (!timeStr) return '';
+  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  if (!match) return timeStr;
   let [, h, m, period] = match;
   let hour = parseInt(h, 10);
-  if (period.toUpperCase() === 'PM' && hour !== 12) hour += 12;
-  if (period.toUpperCase() === 'AM' && hour === 12) hour = 0;
+  if (period) {
+    if (period.toUpperCase() === 'PM' && hour !== 12) hour += 12;
+    if (period.toUpperCase() === 'AM' && hour === 12) hour = 0;
+  }
   return `${hour.toString().padStart(2, '0')}:${m}`;
 };
 
 /**
- * Parses "11:15 AM" or "02:30 PM" into minutes from midnight for accurate chronological sorting
+ * Parses "11:15 AM", "12:00 AM", "01:00 AM", or "00:30" into shift-adjusted minutes.
+ * Post-midnight slots (00:xx to 05:xx / 12:xx AM to 05:xx AM) are treated as the end
+ * of that day's shift ((hour < 6 ? hour + 24 : hour) * 60 + minute) so they sort
+ * at the bottom of the day's schedule!
  */
 export const parseTimeToMinutes = (timeStr) => {
   if (!timeStr) return 0;
-  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
   if (!match) return 0;
   let [, h, m, period] = match;
   let hour = parseInt(h, 10);
   const min = parseInt(m, 10);
-  if (period.toUpperCase() === 'PM' && hour !== 12) hour += 12;
-  if (period.toUpperCase() === 'AM' && hour === 12) hour = 0;
-  return hour * 60 + min;
+  if (period) {
+    if (period.toUpperCase() === 'PM' && hour !== 12) hour += 12;
+    if (period.toUpperCase() === 'AM' && hour === 12) hour = 0;
+  }
+  // Shift adjustment: post-midnight hours (0 to 5) belong to the late-night shift of that business day!
+  const shiftHour = hour < 6 ? hour + 24 : hour;
+  return shiftHour * 60 + min;
 };
 
 /**
@@ -164,21 +179,60 @@ export const isWeekend = (dateInput) => {
 };
 
 /**
- * Generates 15-minute slot array based on whether date is Weekend or Weekday
+ * Generates structured time slot groups:
+ * - standard: Normal operating hours (e.g. 11 AM - 10 PM on Weekdays, 10:30 AM - 11 PM on Weekends)
+ * - extended: Late night slots past closing hours all the way to 1:00 AM
+ * - all: Combined list
  */
-export const generateTimeSlots = (isWeekendDay) => {
+export const getTimeSlotGroups = (isWeekendDay) => {
   const config = isWeekendDay ? OPERATING_HOURS.weekend : OPERATING_HOURS.weekday;
-  const slots = [];
-  
-  let currentMinutes = config.startHour * 60 + config.startMin;
-  const endMinutes = config.endHour * 60 + config.endMin;
+  const standard = [];
+  const extended = [];
 
-  while (currentMinutes <= endMinutes) {
-    const h = Math.floor(currentMinutes / 60);
-    const m = currentMinutes % 60;
-    slots.push(formatTime12h(h, m));
-    currentMinutes += 15;
+  let currentMin = config.startHour * 60 + config.startMin;
+  const standardEndMin = config.endHour * 60 + config.endMin;
+  const extendedEndMin = (config.extendedEndHour || 25) * 60 + (config.extendedEndMin || 0);
+
+  while (currentMin <= standardEndMin) {
+    const h = Math.floor(currentMin / 60);
+    const m = currentMin % 60;
+    standard.push(formatTime12h(h, m));
+    currentMin += 15;
   }
 
-  return slots;
+  // Next slot starts 15 mins after standard close
+  while (currentMin <= extendedEndMin) {
+    const h = Math.floor(currentMin / 60);
+    const m = currentMin % 60;
+    extended.push(formatTime12h(h, m));
+    currentMin += 15;
+  }
+
+  return {
+    standard,
+    extended,
+    all: [...standard, ...extended]
+  };
+};
+
+/**
+ * Generates 15-minute slot array based on whether date is Weekend or Weekday.
+ * Supports includeExtended=true to include late night slots till 1:00 AM.
+ */
+export const generateTimeSlots = (isWeekendDay, includeExtended = false) => {
+  const groups = getTimeSlotGroups(isWeekendDay);
+  return includeExtended ? groups.all : groups.standard;
+};
+
+/**
+ * Helper to identify complimentary bookings (100% off / kids under 6 / complimentary)
+ */
+export const isComplimentaryBooking = (booking) => {
+  if (!booking) return false;
+  return (
+    booking.offerId === 'complimentary' ||
+    Number(booking.discountPercent) === 100 ||
+    (booking.offerName && booking.offerName.toLowerCase().includes('complimentary')) ||
+    (booking.notes && booking.notes.toLowerCase().includes('complimentary'))
+  );
 };

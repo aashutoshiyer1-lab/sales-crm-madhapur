@@ -168,7 +168,12 @@ export default function BookingDetailModal({
                 {booking.discountAmount > 0 && (
                   <tr className="bg-emerald-50/50">
                     <td colSpan={3} className="py-2.5 px-4 text-xs font-bold text-emerald-800">
-                      Discount Applied: {booking.offerName} ({booking.discountPercent}%)
+                      <div>Discount Applied: {booking.offerName} ({booking.discountPercent}%)</div>
+                      {(booking.customDiscountReason || booking.customNote) && (
+                        <div className="text-[11px] text-amber-900 font-semibold italic mt-0.5">
+                          Reason: {booking.customDiscountReason || booking.customNote}
+                        </div>
+                      )}
                     </td>
                     <td className="py-2.5 px-4 text-right font-mono font-black text-emerald-700">
                       - {formatCurrency(booking.discountAmount)}
