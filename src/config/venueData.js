@@ -69,7 +69,7 @@ export const OFFERS = [
     name: "Cross Promotion Coupon",
     discountPercent: 30,
     allowedPercents: [10, 15, 20, 25, 30],
-    defaultReference: "Nayeem Sir",
+    defaultReference: "Khaja Sir",
     requiresReference: true,
     reasonText: "they had cross promotion coupon"
   },
@@ -77,7 +77,7 @@ export const OFFERS = [
     id: "cross_promotion_brochure",
     name: "Cross Promotion Brochure",
     discountPercent: 30,
-    defaultReference: "Nayeem Sir",
+    defaultReference: "Khaja Sir",
     requiresReference: true,
     reasonText: "they had cross promotion brochure"
   },
@@ -86,7 +86,7 @@ export const OFFERS = [
     name: "Second Game Special",
     discountPercent: 20,
     allowedPercents: [10, 20],
-    defaultReference: "Nayeem Sir",
+    defaultReference: "Khaja Sir",
     requiresReference: true,
     reasonText: "it was their second game on the same day"
   },
@@ -95,7 +95,7 @@ export const OFFERS = [
     name: "Birthday Package",
     discountPercent: 15,
     allowedPercents: [10, 15],
-    defaultReference: "Nayeem Sir",
+    defaultReference: "Khaja Sir",
     requiresReference: true,
     reasonText: "they had birthday package"
   },
@@ -103,7 +103,7 @@ export const OFFERS = [
     id: "corporate_package",
     name: "Corporate Package",
     discountPercent: 15,
-    defaultReference: "Nayeem Sir",
+    defaultReference: "Khaja Sir",
     requiresReference: true,
     reasonText: "it was corporate package"
   },
@@ -111,7 +111,7 @@ export const OFFERS = [
     id: "high_price_retention",
     name: "Going Back Due to High Prices",
     discountPercent: 10,
-    defaultReference: "Nayeem Sir",
+    defaultReference: "Khaja Sir",
     requiresReference: true,
     reasonText: "they were going back due to high prices"
   },
@@ -119,7 +119,7 @@ export const OFFERS = [
     id: "complimentary",
     name: "Complimentary Game (Kids Under 5 Years)",
     discountPercent: 100,
-    defaultReference: "Nayeem Sir",
+    defaultReference: "Khaja Sir",
     requiresReference: true,
     isComplimentary: true,
     reasonText: "they were under 5 years"
@@ -136,7 +136,6 @@ export const OFFERS = [
 ];
 
 export const APPROVAL_REFERENCES = [
-  "Nayeem Sir",
   "Khaja Sir"
 ];
 

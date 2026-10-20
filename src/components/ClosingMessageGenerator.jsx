@@ -15,7 +15,12 @@ import {
   AlertCircle,
   Printer,
   RotateCcw,
-  X
+  X,
+  Edit3,
+  Tag,
+  CheckCircle2,
+  Eye,
+  PlusCircle
 } from 'lucide-react';
 import { getPaidTotal } from '../utils/pricingEngine';
 import { STAFF_ROSTER, GAMES, OFFERS } from '../config/venueData';
@@ -65,13 +70,15 @@ export const formatCustomNoteGrammar = (note) => {
  * - Complimentary kids under 5
  * - Standard discounts (Cross Promo, Second Game, Birthday, Corporate, High Prices)
  * - Custom discount
+ * (Nayeem / 900 reference completely stripped)
  */
 export const generateBookingNoteSentence = (booking) => {
   const pax = booking.players || 1;
   const room = booking.gameName || 'Escape Room';
   const offerId = booking.offerId || 'none';
   const offer = OFFERS.find(o => o.id === offerId);
-  const ref = booking.reference ? booking.reference : (offer?.defaultReference || 'Nayeem Sir');
+  const rawRef = booking.reference ? booking.reference : (offer?.defaultReference || 'Khaja Sir');
+  const ref = (rawRef || 'Khaja Sir').replace(/nayeem\s*sir|900/gi, '').trim() || 'Khaja Sir';
   const pct = booking.discountPercent || offer?.discountPercent || 0;
   const customReason = (booking.customDiscountReason || '').trim();
 
@@ -172,6 +179,29 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
   const [printNotesText, setPrintNotesText] = useState(initialSaved?.printNotesText || "");
   const [isPrintNotesCustomized, setIsPrintNotesCustomized] = useState(initialSaved?.isPrintNotesCustomized || false);
 
+  // Manual Discount Entries added directly on Closing screen (persisted in RTDB)
+  const [manualDiscountEntries, setManualDiscountEntries] = useState(
+    initialSaved?.manualDiscountEntries || []
+  );
+
+  // Direct Editable Closing Message Mode (staff can edit any sentence/line across devices)
+  const [isEditMessageMode, setIsEditMessageMode] = useState(
+    initialSaved?.isEditMessageMode || false
+  );
+  const [customFullMessage, setCustomFullMessage] = useState(
+    initialSaved?.customFullMessage || ""
+  );
+
+  // Form State for Adding a New Discount Entry
+  const [newDiscRoom, setNewDiscRoom] = useState(GAMES[0]?.name || "Bank Heist");
+  const [newDiscOfferId, setNewDiscOfferId] = useState("cross_promotion");
+  const [newDiscPax, setNewDiscPax] = useState(4);
+  const [newDiscPercent, setNewDiscPercent] = useState(30);
+  const [newDiscRef, setNewDiscRef] = useState("Khaja Sir");
+  const [newDiscCustomerName, setNewDiscCustomerName] = useState("");
+  const [newDiscPhone, setNewDiscPhone] = useState("");
+  const [newDiscNote, setNewDiscNote] = useState("");
+
   const [copiedStatus, setCopiedStatus] = useState(false);
 
   // Sync state when closing date changes (load from LocalStorage)
@@ -186,9 +216,15 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       setClosingNote(saved.closingNote || "");
       setPrintNotesText(saved.printNotesText || "");
       setIsPrintNotesCustomized(saved.isPrintNotesCustomized || false);
+      setManualDiscountEntries(saved.manualDiscountEntries || []);
+      setIsEditMessageMode(saved.isEditMessageMode || false);
+      setCustomFullMessage(saved.customFullMessage || "");
     } else {
       setPrintNotesText("");
       setIsPrintNotesCustomized(false);
+      setManualDiscountEntries([]);
+      setIsEditMessageMode(false);
+      setCustomFullMessage("");
     }
   }, [closingDate]);
 
@@ -201,6 +237,9 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       excessAmount,
       shortAmount,
       closingNote,
+      manualDiscountEntries,
+      isEditMessageMode,
+      customFullMessage,
       printNotesText: isPrintNotesCustomized ? printNotesText : "",
       isPrintNotesCustomized,
       updatedAt: new Date().toISOString()
@@ -213,9 +252,22 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     }
 
     saveClosingReportToFirebase(closingDate, payload);
-  }, [closingDate, closingStaff, customClosingStaff, mummyActors, excessAmount, shortAmount, closingNote, printNotesText, isPrintNotesCustomized]);
+  }, [
+    closingDate,
+    closingStaff,
+    customClosingStaff,
+    mummyActors,
+    excessAmount,
+    shortAmount,
+    closingNote,
+    manualDiscountEntries,
+    isEditMessageMode,
+    customFullMessage,
+    printNotesText,
+    isPrintNotesCustomized
+  ]);
 
-  // Real-time remote listener from Firebase RTDB (cross-tab / multi-device sync)
+  // Real-time remote listener from Firebase RTDB (cross-tab / multi-device sync for laptop, phone, tablet)
   useEffect(() => {
     if (!rtdb || !isFirebaseConfigured() || !closingDate) return;
     try {
@@ -231,6 +283,9 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
           if (data.closingNote !== undefined) setClosingNote(data.closingNote);
           if (data.printNotesText !== undefined) setPrintNotesText(data.printNotesText);
           if (data.isPrintNotesCustomized !== undefined) setIsPrintNotesCustomized(data.isPrintNotesCustomized);
+          if (data.manualDiscountEntries !== undefined) setManualDiscountEntries(data.manualDiscountEntries);
+          if (data.isEditMessageMode !== undefined) setIsEditMessageMode(data.isEditMessageMode);
+          if (data.customFullMessage !== undefined) setCustomFullMessage(data.customFullMessage);
         }
       });
       return () => unsubscribe();
@@ -349,6 +404,39 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     if (setSelectedDate) setSelectedDate(today);
   };
 
+  // Handle adding manual discount entry directly from closing screen
+  const handleAddManualDiscount = () => {
+    if (!newDiscCustomerName.trim() && !newDiscNote.trim()) {
+      alert("Please enter customer name or custom note/reason.");
+      return;
+    }
+    const off = OFFERS.find(o => o.id === newDiscOfferId);
+    const entry = {
+      id: `MDE-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      gameName: newDiscRoom,
+      offerId: newDiscOfferId,
+      offerName: off ? off.name : 'Discount Offer',
+      players: Number(newDiscPax) || 1,
+      discountPercent: Number(newDiscPercent) || (off ? off.discountPercent : 0),
+      reference: (newDiscRef || 'Khaja Sir').replace(/nayeem\s*sir|900/gi, '').trim() || 'Khaja Sir',
+      customerName: newDiscCustomerName.trim(),
+      customerPhone: newDiscPhone.trim(),
+      customDiscountReason: newDiscNote.trim(),
+      customNote: newDiscNote.trim(),
+      notes: newDiscNote.trim(),
+      isManualDiscountEntry: true
+    };
+
+    setManualDiscountEntries(prev => [...prev, entry]);
+    setNewDiscCustomerName("");
+    setNewDiscPhone("");
+    setNewDiscNote("");
+  };
+
+  const handleRemoveManualDiscount = (id) => {
+    setManualDiscountEntries(prev => prev.filter(e => e.id !== id));
+  };
+
   // Group discount/note bookings by room for WhatsApp note section & print preview
   const groupedRoomNotes = useMemo(() => {
     const discountOrNoteBookings = dayBookings.filter(b => {
@@ -360,13 +448,15 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       return hasOffer || hasDiscount || hasReason || hasCustomNote || hasNotes;
     });
 
+    const combinedList = [...discountOrNoteBookings, ...manualDiscountEntries];
+
     const roomMap = new Map();
     // Pre-populate with standard GAMES from venueData
     GAMES.forEach(g => {
       roomMap.set(g.name, []);
     });
 
-    discountOrNoteBookings.forEach(b => {
+    combinedList.forEach(b => {
       const room = b.gameName || 'Other Rooms';
       if (!roomMap.has(room)) {
         roomMap.set(room, []);
@@ -375,7 +465,7 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     });
 
     return roomMap;
-  }, [dayBookings]);
+  }, [dayBookings, manualDiscountEntries]);
 
   // Auto-generated print text from grouped room notes
   const autoGeneratedPrintNotes = useMemo(() => {
@@ -522,9 +612,11 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     groupedRoomNotes
   ]);
 
+  const activeMessage = (isEditMessageMode && customFullMessage) ? customFullMessage : generatedMessage;
+
   // Copy to Clipboard
   const handleCopyMessage = () => {
-    navigator.clipboard.writeText(generatedMessage).then(() => {
+    navigator.clipboard.writeText(activeMessage).then(() => {
       setCopiedStatus(true);
       setTimeout(() => setCopiedStatus(false), 2500);
     });
@@ -532,7 +624,7 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
 
   // WhatsApp Share Link
   const handleOpenWhatsApp = () => {
-    const encoded = encodeURIComponent(generatedMessage);
+    const encoded = encodeURIComponent(activeMessage);
     window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
   };
 
@@ -802,10 +894,204 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
             </div>
           </div>
 
+          {/* 3. Add Discount Entry (Live Cloud Sync across devices) */}
+          <div className="bg-white p-5 rounded-3xl border-2 border-blue-300 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b-2 border-blue-100 pb-2">
+              <div>
+                <h3 className="text-xs font-black uppercase text-blue-900 tracking-wider flex items-center space-x-1.5">
+                  <Tag className="w-4 h-4 text-blue-600" />
+                  <span>3. Add Discount Entry (Auto-Populates in Report)</span>
+                </h3>
+                <span className="text-[11px] font-bold text-slate-500">
+                  Instantly adds to WhatsApp message & persists in cloud database
+                </span>
+              </div>
+              <span className="text-[10px] font-black text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300">
+                {manualDiscountEntries.length} Added
+              </span>
+            </div>
+
+            {/* Input Form */}
+            <div className="p-4 bg-blue-50/60 rounded-2xl border border-blue-200 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Game / Room */}
+                <div>
+                  <label className="block text-[11px] font-black text-blue-950 mb-1">
+                    Select Escape Room:
+                  </label>
+                  <select
+                    value={newDiscRoom}
+                    onChange={(e) => setNewDiscRoom(e.target.value)}
+                    className="w-full bg-white border-2 border-blue-300 rounded-xl px-2.5 py-1.5 text-xs font-black text-slate-950 outline-none cursor-pointer"
+                  >
+                    {GAMES.map(g => (
+                      <option key={g.id} value={g.name}>{g.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Offer */}
+                <div>
+                  <label className="block text-[11px] font-black text-blue-950 mb-1">
+                    Discount / Deal Offer:
+                  </label>
+                  <select
+                    value={newDiscOfferId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setNewDiscOfferId(id);
+                      const off = OFFERS.find(o => o.id === id);
+                      if (off) {
+                        setNewDiscPercent(off.discountPercent);
+                      }
+                    }}
+                    className="w-full bg-white border-2 border-blue-300 rounded-xl px-2.5 py-1.5 text-xs font-black text-slate-950 outline-none cursor-pointer"
+                  >
+                    {OFFERS.filter(o => o.id !== 'none').map(o => (
+                      <option key={o.id} value={o.id}>{o.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {/* Pax */}
+                <div>
+                  <label className="block text-[10px] font-black text-blue-950 mb-1">Players (Pax):</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="40"
+                    value={newDiscPax}
+                    onChange={(e) => setNewDiscPax(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    className="w-full bg-white border-2 border-blue-300 rounded-xl px-2.5 py-1.5 text-center font-mono font-black text-xs text-slate-950 outline-none"
+                  />
+                </div>
+
+                {/* Discount % */}
+                <div>
+                  <label className="block text-[10px] font-black text-blue-950 mb-1">Discount %:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={newDiscPercent}
+                    onChange={(e) => setNewDiscPercent(Math.min(100, Math.max(0, parseInt(e.target.value, 10) || 0)))}
+                    className="w-full bg-white border-2 border-blue-300 rounded-xl px-2.5 py-1.5 text-center font-mono font-black text-xs text-slate-950 outline-none"
+                  />
+                </div>
+
+                {/* Reference */}
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-black text-blue-950 mb-1">Approval Reference:</label>
+                  <input
+                    type="text"
+                    value={newDiscRef}
+                    onChange={(e) => setNewDiscRef(e.target.value)}
+                    placeholder="Khaja Sir"
+                    className="w-full bg-white border-2 border-blue-300 rounded-xl px-2.5 py-1.5 text-xs font-black text-slate-950 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Customer Name */}
+                <div>
+                  <label className="block text-[10px] font-black text-blue-950 mb-1">Customer Name:</label>
+                  <input
+                    type="text"
+                    placeholder="Enter customer name"
+                    value={newDiscCustomerName}
+                    onChange={(e) => setNewDiscCustomerName(e.target.value)}
+                    className="w-full bg-white border-2 border-blue-300 rounded-xl px-2.5 py-1.5 text-xs font-black text-slate-950 outline-none"
+                  />
+                </div>
+
+                {/* Phone */}
+                <div>
+                  <label className="block text-[10px] font-black text-blue-950 mb-1">Mobile Number:</label>
+                  <input
+                    type="tel"
+                    placeholder="10-digit mobile number"
+                    value={newDiscPhone}
+                    onChange={(e) => setNewDiscPhone(e.target.value)}
+                    className="w-full bg-white border-2 border-blue-300 rounded-xl px-2.5 py-1.5 text-xs font-mono font-black text-slate-950 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Note / Reason */}
+              <div>
+                <label className="block text-[10px] font-black text-blue-950 mb-1">
+                  Custom Reason / Note (Grammatically formatted automatically):
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Software crashed 5 mins, Birthday ID verified, Cross promo voucher presented..."
+                  value={newDiscNote}
+                  onChange={(e) => setNewDiscNote(e.target.value)}
+                  className="w-full bg-white border-2 border-blue-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-950 outline-none"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAddManualDiscount}
+                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl shadow-xs transition flex items-center justify-center space-x-1.5 cursor-pointer active:scale-95"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>+ Add Discount Entry to Closing Message</span>
+              </button>
+            </div>
+
+            {/* List of Manual Discount Entries Added */}
+            {manualDiscountEntries.length > 0 && (
+              <div className="space-y-2 pt-1">
+                <span className="text-[11px] font-black text-blue-950 block">Manually Added Discounts for {formattedDisplayDate}:</span>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {manualDiscountEntries.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between p-2.5 bg-blue-50 rounded-xl border border-blue-200 text-xs"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-black text-blue-900">{item.gameName}</span>
+                          <span className="text-[10px] font-bold bg-white text-blue-800 px-1.5 py-0.2 rounded border border-blue-200">
+                            {item.discountPercent}% OFF
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-500">
+                            {item.players} Players
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-700 font-semibold">
+                          {item.customerName || 'N/A'} ({item.customerPhone || 'N/A'}) • Ref: {item.reference}
+                        </div>
+                        {item.customNote && (
+                          <div className="text-[10px] text-amber-900 italic font-medium">
+                            "{item.customNote}"
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveManualDiscount(item.id)}
+                        className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg ml-2"
+                        title="Remove Discount Entry"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Excess, Short, Notes & Closing Staff Name */}
           <div className="bg-white p-5 rounded-3xl border-2 border-blue-300 shadow-sm space-y-4">
             <h3 className="text-xs font-black uppercase text-blue-900 tracking-wider border-b-2 border-blue-100 pb-2">
-              3. Closing Details & Staff Sign-off
+              4. Closing Details & Staff Sign-off
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -896,14 +1182,45 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
             <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-blue-100 pb-3">
               <div>
                 <span className="text-xs font-black uppercase text-blue-900 tracking-wider block">
-                  WhatsApp Preview
+                  WhatsApp Closing Message
                 </span>
                 <span className="text-[11px] font-bold text-slate-500">
-                  Ready to copy & paste
+                  {isEditMessageMode ? '✏️ Custom Edit Mode Active' : 'Ready to copy & paste'}
                 </span>
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Toggle between Direct Message Edit & Preview */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isEditMessageMode) {
+                      if (!customFullMessage) setCustomFullMessage(generatedMessage);
+                      setIsEditMessageMode(true);
+                    } else {
+                      setIsEditMessageMode(false);
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center space-x-1.5 shadow-xs transition active:scale-95 cursor-pointer ${
+                    isEditMessageMode
+                      ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                      : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                  }`}
+                  title={isEditMessageMode ? "Switch to Preview View" : "Edit any sentence or line of closing message"}
+                >
+                  {isEditMessageMode ? (
+                    <>
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Preview Mode</span>
+                    </>
+                  ) : (
+                    <>
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>✏️ Edit Message Lines</span>
+                    </>
+                  )}
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -918,17 +1235,48 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                   <Printer className="w-4 h-4" />
                   <span>Print Escape Notes</span>
                 </button>
-
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                  WhatsApp
-                </span>
               </div>
             </div>
 
-            {/* Formatted Code Block */}
-            <div className="bg-[#fcfefe] border-2 border-blue-200 rounded-2xl p-4 font-mono text-xs leading-relaxed text-slate-900 select-all whitespace-pre-wrap max-h-[500px] overflow-y-auto shadow-inner">
-              {generatedMessage}
-            </div>
+            {/* Editable Mode vs Live Preview Code Block */}
+            {isEditMessageMode ? (
+              <div className="space-y-2 animate-fadeIn">
+                <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-300 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-amber-950">
+                  <div className="flex items-center space-x-1.5">
+                    <Edit3 className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span className="text-[11px]">
+                      Live Cloud Editing: Edits are synced to Firebase RTDB for all tablets, laptops & phones.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomFullMessage("");
+                      setIsEditMessageMode(false);
+                    }}
+                    className="px-2 py-0.5 bg-white hover:bg-amber-100 rounded border border-amber-300 text-[10px] font-black text-amber-900 transition flex items-center space-x-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Revert to Auto</span>
+                  </button>
+                </div>
+
+                <textarea
+                  rows={20}
+                  value={customFullMessage || generatedMessage}
+                  onChange={(e) => {
+                    setCustomFullMessage(e.target.value);
+                    setIsEditMessageMode(true);
+                  }}
+                  className="w-full bg-[#fcfefe] border-2 border-indigo-400 focus:border-indigo-600 rounded-2xl p-4 font-mono text-xs leading-relaxed text-slate-900 outline-none shadow-inner"
+                  placeholder="Type or edit any sentence or line here..."
+                />
+              </div>
+            ) : (
+              <div className="bg-[#fcfefe] border-2 border-blue-200 rounded-2xl p-4 font-mono text-xs leading-relaxed text-slate-900 select-all whitespace-pre-wrap max-h-[500px] overflow-y-auto shadow-inner">
+                {activeMessage}
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="space-y-2 pt-2">

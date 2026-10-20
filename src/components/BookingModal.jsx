@@ -163,17 +163,24 @@ export default function BookingModal({
     bookingToEdit?.customDiscountReason || bookingToEdit?.customNote || ''
   );
 
-  // Approval Reference (Standard Nayeem Sir / Khaja Sir or Custom Name)
-  const initialRef = bookingToEdit?.reference || '';
-  const isInitialStdRef = (APPROVAL_REFERENCES || []).includes(initialRef);
+  // Approval Reference (Only Khaja Sir or Custom Name - Nayeem / 900 reference completely removed)
+  const initialRef = (bookingToEdit?.reference || '').replace(/nayeem\s*sir|900/gi, '').trim();
+  const isInitialKhaja = initialRef === 'Khaja Sir';
   const [refType, setRefType] = useState(() => {
     if (!initialRef) return 'none';
-    if (isInitialStdRef) return initialRef;
+    if (isInitialKhaja) return 'Khaja Sir';
     return 'custom';
   });
   const [customRefName, setCustomRefName] = useState(() => {
-    return isInitialStdRef ? '' : initialRef;
+    return isInitialKhaja ? '' : initialRef;
   });
+
+  // Weekday vs Weekend Rate Toggle (allows staff to give weekday price on weekend or vice versa)
+  const [rateType, setRateType] = useState(() => {
+    if (bookingToEdit?.rateType) return bookingToEdit.rateType;
+    return isWeekend(bookingToEdit?.date || defaultDate) ? 'weekend' : 'weekday';
+  });
+  const [isRateManuallyToggled, setIsRateManuallyToggled] = useState(Boolean(bookingToEdit?.rateType));
 
   // 4. Split Payments State
   const [isPending, setIsPending] = useState(
@@ -209,14 +216,29 @@ export default function BookingModal({
       );
 
       setCustomDiscountReason(bookingToEdit.customDiscountReason || bookingToEdit.customNote || '');
-      const refVal = bookingToEdit.reference || '';
-      const isStd = (APPROVAL_REFERENCES || []).includes(refVal);
-      setRefType(refVal ? (isStd ? refVal : 'custom') : 'none');
-      setCustomRefName(isStd ? '' : refVal);
+      const cleanRef = (bookingToEdit.reference || '').replace(/nayeem\s*sir|900/gi, '').trim();
+      const isStd = cleanRef === 'Khaja Sir';
+      setRefType(cleanRef ? (isStd ? 'Khaja Sir' : 'custom') : 'none');
+      setCustomRefName(isStd ? '' : cleanRef);
       setIsPending(bookingToEdit.isPending ?? (bookingToEdit.paymentStatus === 'pending'));
       setPayments(bookingToEdit.payments ? { ...bookingToEdit.payments } : {});
+
+      if (bookingToEdit.rateType) {
+        setRateType(bookingToEdit.rateType);
+        setIsRateManuallyToggled(true);
+      } else {
+        setRateType(isWeekend(bookingToEdit.date || defaultDate) ? 'weekend' : 'weekday');
+        setIsRateManuallyToggled(false);
+      }
     }
   }, [bookingToEdit]);
+
+  // Keep rateType in sync with date changes if staff has not manually overridden
+  useEffect(() => {
+    if (!isRateManuallyToggled) {
+      setRateType(isWeekend(date) ? 'weekend' : 'weekday');
+    }
+  }, [date, isRateManuallyToggled]);
 
   // Handle Offer Selection and auto-populate default reference & discount percent
   const handleOfferChange = (newOfferId) => {
@@ -228,7 +250,7 @@ export default function BookingModal({
         setRefType(selected.defaultReference);
         setCustomRefName('');
       } else if (selected.requiresReference && refType === 'none') {
-        setRefType('Nayeem Sir');
+        setRefType('Khaja Sir');
         setCustomRefName('');
       } else if (!selected.requiresReference && !selected.defaultReference) {
         setRefType('none');
@@ -255,15 +277,18 @@ export default function BookingModal({
     }
   }, [date, isCustomTime, slotGroups]);
 
+  const isWeekendRate = rateType === 'weekend';
+
   // Pricing calculation
   const pricing = useMemo(() => {
     return calculatePricing({
       date,
       players,
       offerId,
-      customDiscountPercent: discountPercent
+      customDiscountPercent: discountPercent,
+      isWeekendOverride: isWeekendRate
     });
-  }, [date, players, offerId, discountPercent]);
+  }, [date, players, offerId, discountPercent, isWeekendRate]);
 
   const paidTotal = useMemo(() => getPaidTotal(payments), [payments]);
   const remainingBalance = Math.max(0, pricing.finalTotal - paidTotal);
@@ -368,6 +393,8 @@ export default function BookingModal({
     } else if (refType === 'custom') {
       finalReference = customRefName.trim();
     }
+    // Safety check: ensure 900 / Nayeem reference is completely stripped
+    finalReference = finalReference.replace(/nayeem\s*sir|900/gi, '').trim();
 
     const cleanPayments = {};
     PAYMENT_MODES.forEach(m => {
@@ -393,6 +420,8 @@ export default function BookingModal({
       updatedAt: new Date().toISOString(),
       date,
       timeSlot,
+      rateType: isWeekendRate ? 'weekend' : 'weekday',
+      isWeekendRate: isWeekendRate,
       gameName,
       players: numPlayers,
       playerCategory: getPlayerCategory(numPlayers),
@@ -438,7 +467,7 @@ export default function BookingModal({
 
   const refOptions = useMemo(() => [
     { value: 'none', label: 'None (Standard Rate)' },
-    ...(APPROVAL_REFERENCES || ['Nayeem Sir', 'Khaja Sir']).map(ref => ({ value: ref, label: ref })),
+    ...(APPROVAL_REFERENCES || ['Khaja Sir']).map(ref => ({ value: ref, label: ref })),
     { value: 'custom', label: '+ Specific / Other Custom Name' }
   ], []);
 
@@ -668,6 +697,59 @@ export default function BookingModal({
               </div>
             </div>
 
+            {/* Interactive Weekday / Weekend Rate Toggle */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-blue-50/90 rounded-2xl border-2 border-blue-200">
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-black text-blue-950">Pricing Rate Mode:</span>
+                <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+                  isWeekendRate
+                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                    : 'bg-blue-100 text-blue-900 border-blue-300'
+                }`}>
+                  {isWeekendRate ? '🌴 Weekend Rates Applied' : '🏢 Weekday Rates Applied'}
+                </span>
+                {isRateManuallyToggled && (
+                  <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
+                    Manual Override
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center space-x-1.5 bg-white p-1 rounded-xl border border-blue-300 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRateType('weekday');
+                    setIsRateManuallyToggled(true);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center space-x-1 cursor-pointer ${
+                    rateType === 'weekday'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-blue-900 hover:bg-blue-50'
+                  }`}
+                >
+                  <span>🏢 Weekday Rate</span>
+                  <span className="text-[10px] font-mono opacity-80">(₹999/899/799)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRateType('weekend');
+                    setIsRateManuallyToggled(true);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center space-x-1 cursor-pointer ${
+                    rateType === 'weekend'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'text-amber-950 hover:bg-amber-50'
+                  }`}
+                >
+                  <span>🌴 Weekend Rate</span>
+                  <span className="text-[10px] font-mono opacity-80">(₹1099/999/899)</span>
+                </button>
+              </div>
+            </div>
+
             {/* Manual Player Entry Bar + 3 Auto-Selected Tiers */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
               
@@ -736,7 +818,7 @@ export default function BookingModal({
                     )}
                   </div>
                   <p className={`text-base font-black font-mono mt-1 ${activeTier === '2-3' ? 'text-white' : 'text-blue-950'}`}>
-                    {weekendStatus ? '₹1,099' : '₹999'}
+                    {isWeekendRate ? '₹1,099' : '₹999'}
                   </p>
                   <span className={`text-[10px] font-bold ${activeTier === '2-3' ? 'text-blue-100' : 'text-blue-700'}`}>per player</span>
                 </div>
@@ -759,7 +841,7 @@ export default function BookingModal({
                     )}
                   </div>
                   <p className={`text-base font-black font-mono mt-1 ${activeTier === '4-6' ? 'text-white' : 'text-blue-950'}`}>
-                    {weekendStatus ? '₹999' : '₹899'}
+                    {isWeekendRate ? '₹999' : '₹899'}
                   </p>
                   <span className={`text-[10px] font-bold ${activeTier === '4-6' ? 'text-blue-100' : 'text-blue-700'}`}>per player</span>
                 </div>
@@ -782,7 +864,7 @@ export default function BookingModal({
                     )}
                   </div>
                   <p className={`text-base font-black font-mono mt-1 ${activeTier === '7+' ? 'text-white' : 'text-blue-950'}`}>
-                    {weekendStatus ? '₹899' : '₹799'}
+                    {isWeekendRate ? '₹899' : '₹799'}
                   </p>
                   <span className={`text-[10px] font-bold ${activeTier === '7+' ? 'text-blue-100' : 'text-blue-700'}`}>per player</span>
                 </div>

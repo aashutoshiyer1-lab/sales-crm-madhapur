@@ -11,8 +11,10 @@ import { isWeekend, OFFERS } from '../config/venueData';
  *   4-6: ₹999
  *   7+:  ₹899
  */
-export const getTierRatePerPlayer = (dateStr, playerCount) => {
-  const weekend = isWeekend(dateStr);
+export const getTierRatePerPlayer = (dateStr, playerCount, isWeekendOverride = null) => {
+  const weekend = isWeekendOverride !== null && isWeekendOverride !== undefined
+    ? Boolean(isWeekendOverride)
+    : isWeekend(dateStr);
   const count = Math.max(1, parseInt(playerCount, 10) || 1);
 
   if (weekend) {
@@ -35,10 +37,11 @@ export const calculatePricing = ({
   offerId = 'none',
   customRate = null,
   customDiscount = null,
-  customDiscountPercent = null
+  customDiscountPercent = null,
+  isWeekendOverride = null
 }) => {
   const count = Math.max(1, parseInt(players, 10) || 1);
-  const standardRate = getTierRatePerPlayer(date, count);
+  const standardRate = getTierRatePerPlayer(date, count, isWeekendOverride);
   const ratePerPlayer = customRate !== null && customRate !== undefined && !isNaN(customRate)
     ? Number(customRate)
     : standardRate;
