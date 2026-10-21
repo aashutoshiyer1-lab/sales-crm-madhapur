@@ -33,7 +33,8 @@ export default function SalesDashboard({
   bookings,
   onOpenBookingModal,
   onOpenDetailModal,
-  onDeleteBooking
+  onDeleteBooking,
+  onUpdateBooking
 }) {
   const [dateFilter, setDateFilter] = useState('Today');
   const [customStartDate, setCustomStartDate] = useState('');
@@ -41,6 +42,34 @@ export default function SalesDashboard({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPaymentMode, setSelectedPaymentMode] = useState('ALL');
   const [copiedStatus, setCopiedStatus] = useState(false);
+
+  // Helper to get resolved player category (strictly honors manual override / saved category)
+  const getDisplayCategory = (booking) => {
+    if (!booking) return '2–3 Players';
+    const cat = booking.playerCategory || booking.categoryOverride || booking.customCategory;
+    if (cat) {
+      if (cat.includes('7')) return '7+ Players';
+      if (cat.includes('4') || cat.includes('5') || cat.includes('6')) return '4–6 Players';
+      if (cat.includes('2') || cat.includes('3')) return '2–3 Players';
+      return cat;
+    }
+    return getPlayerCategory(booking.players);
+  };
+
+  // Immediate category change with Realtime Database (RTDB) & LocalStorage synchronization
+  const handleCategoryChange = (booking, newCategory) => {
+    if (!booking) return;
+    const updated = {
+      ...booking,
+      playerCategory: newCategory,
+      categoryOverride: newCategory,
+      customCategory: newCategory,
+      updatedAt: new Date().toISOString()
+    };
+    if (onUpdateBooking) {
+      onUpdateBooking(updated);
+    }
+  };
 
   // Helper date getters
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -275,7 +304,7 @@ export default function SalesDashboard({
         `"${time24}"`,
         `"${b.gameName || ''}"`,
         b.players || 0,
-        `"${getPlayerCategory(b.players)}"`,
+        `"${getDisplayCategory(b)}"`,
         `"${(b.customerName || '').replace(/"/g, '""')}"`,
         `"${b.customerPhone || ''}"`,
         b.ratePerPlayer || 0,
@@ -593,7 +622,7 @@ export default function SalesDashboard({
 
                       {/* Players & Category Column */}
                       <td className="py-4 px-4 align-top whitespace-nowrap">
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <div className="flex items-center space-x-1.5">
                             <span className="text-base sm:text-lg font-mono font-black text-slate-950">
                               {booking.players}
@@ -603,16 +632,25 @@ export default function SalesDashboard({
                               (@ ₹{booking.ratePerPlayer}/p)
                             </span>
                           </div>
-                          <div>
-                            <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-black border ${
-                              Number(booking.players) >= 7
-                                ? 'bg-purple-100 text-purple-900 border-purple-300'
-                                : Number(booking.players) >= 4
-                                ? 'bg-blue-100 text-blue-900 border-blue-300'
-                                : 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                            }`}>
-                              [{getPlayerCategory(booking.players)} Category]
-                            </span>
+
+                          {/* Interactive Category Selector with Realtime Database (RTDB) sync */}
+                          <div className="relative">
+                            <select
+                              value={getDisplayCategory(booking)}
+                              onChange={(e) => handleCategoryChange(booking, e.target.value)}
+                              className={`text-xs font-black font-mono rounded-lg px-2.5 py-1.5 border-2 outline-none cursor-pointer shadow-2xs transition ${
+                                getDisplayCategory(booking).includes('7')
+                                  ? 'bg-purple-50 text-purple-950 border-purple-300 hover:border-purple-500'
+                                  : getDisplayCategory(booking).includes('4') || getDisplayCategory(booking).includes('6')
+                                  ? 'bg-blue-50 text-blue-950 border-blue-300 hover:border-blue-500'
+                                  : 'bg-emerald-50 text-emerald-950 border-emerald-300 hover:border-emerald-500'
+                              }`}
+                              title="Click to change player category (instantly syncs to database)"
+                            >
+                              <option value="2–3 Players">2–3 Players Category</option>
+                              <option value="4–6 Players">4–6 Players Category</option>
+                              <option value="7+ Players">7+ Players Category</option>
+                            </select>
                           </div>
                         </div>
                       </td>

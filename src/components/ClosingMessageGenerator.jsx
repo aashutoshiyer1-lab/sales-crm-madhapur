@@ -1201,12 +1201,15 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
 
                 {/* Phone */}
                 <div>
-                  <label className="block text-[10px] font-black text-blue-950 mb-1">Mobile Number:</label>
+                  <label className="block text-[10px] font-black text-blue-950 mb-1">
+                    Mobile Number (10 Digits Max):
+                  </label>
                   <input
                     type="tel"
+                    maxLength={10}
                     placeholder="10-digit mobile number"
                     value={newDiscPhone}
-                    onChange={(e) => setNewDiscPhone(e.target.value)}
+                    onChange={(e) => setNewDiscPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     className="w-full bg-white border-2 border-blue-300 rounded-xl px-2.5 py-1.5 text-xs font-mono font-black text-slate-950 outline-none"
                   />
                 </div>

@@ -151,7 +151,9 @@ export default function BookingDetailModal({
                 <tr>
                   <td className="py-3 px-4">
                     <p className="font-black text-slate-950">{booking.gameName}</p>
-                    <p className="text-xs text-slate-500">Duration: 60 Mins</p>
+                    <p className="text-xs text-slate-500">
+                      Duration: 60 Mins • <span className="font-bold text-blue-900">{booking.playerCategory || booking.categoryOverride || `${booking.players} Players Category`}</span>
+                    </p>
                   </td>
                   <td className="py-3 px-4 text-center font-mono font-bold">
                     {booking.players}

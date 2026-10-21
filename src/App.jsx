@@ -372,6 +372,7 @@ export default function App() {
             onOpenBookingModal={handleOpenEditBooking}
             onOpenDetailModal={handleOpenDetail}
             onDeleteBooking={handleDeleteBooking}
+            onUpdateBooking={handleSaveBooking}
           />
         )}
         {currentView === 'closing' && (
@@ -388,8 +389,15 @@ export default function App() {
       <BookingModal
         key={bookingToEdit ? `edit-${bookingToEdit.id}` : `new-${bookingSlotDefaults.date || ''}-${bookingSlotDefaults.timeSlot || ''}`}
         isOpen={isBookingModalOpen}
-        onClose={() => setIsBookingModalOpen(false)}
-        onSave={handleSaveBooking}
+        onClose={() => {
+          setIsBookingModalOpen(false);
+          setBookingToEdit(null);
+        }}
+        onSave={(data) => {
+          handleSaveBooking(data);
+          setIsBookingModalOpen(false);
+          setBookingToEdit(null);
+        }}
         bookingToEdit={bookingToEdit}
         defaultDate={bookingSlotDefaults.date}
         defaultSlot={bookingSlotDefaults.timeSlot}

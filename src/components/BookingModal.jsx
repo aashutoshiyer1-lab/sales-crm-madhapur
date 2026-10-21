@@ -347,13 +347,15 @@ export default function BookingModal({
     );
   }, [companionBooking]);
 
-  // Auto-select category for complimentary bookings based on companion booking
+  // Auto-select category for complimentary bookings based on companion booking ONLY for NEW bookings
   useEffect(() => {
-    const isComp = offerId === 'complimentary' || selectedOfferObj?.isComplimentary;
-    if (isComp && companionCategory) {
-      setCategoryOverride(companionCategory);
+    if (!bookingToEdit) {
+      const isComp = offerId === 'complimentary' || selectedOfferObj?.isComplimentary;
+      if (isComp && companionCategory) {
+        setCategoryOverride(companionCategory);
+      }
     }
-  }, [offerId, selectedOfferObj, companionCategory]);
+  }, [bookingToEdit, offerId, selectedOfferObj, companionCategory]);
 
   // Sync timeSlot if available slots change, BUT NEVER overwrite custom walk-in time when changing dates!
   useEffect(() => {
@@ -478,6 +480,12 @@ export default function BookingModal({
       return;
     }
 
+    const cleanPhone = customerPhone.replace(/\D/g, '').trim();
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      alert("Please enter a valid 10-digit mobile number (phone numbers must be strictly 10 digits).");
+      return;
+    }
+
     if (!players || Number(players) <= 0) {
       alert("Please enter the number of players (minimum 1 player required).");
       return;
@@ -535,7 +543,7 @@ export default function BookingModal({
     const shouldMarkPending = !isComplimentary && (isPending || (!isFullyPaid && pricing.finalTotal > 0));
     const trimmedCustomReason = customDiscountReason.trim();
 
-    const chosenCategory = confirmedCategory || categoryOverride || getPlayerCategory(numPlayers);
+    const chosenCategory = confirmedCategory || categoryOverride || bookingToEdit?.playerCategory || getPlayerCategory(numPlayers);
 
     const bookingData = {
       id: bookingToEdit?.id || `ETM-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -547,9 +555,9 @@ export default function BookingModal({
       isWeekendRate: isWeekendRate,
       gameName,
       players: numPlayers,
-      categoryOverride: isComplimentary ? chosenCategory : (bookingToEdit?.categoryOverride || null),
-      customCategory: isComplimentary ? chosenCategory : (bookingToEdit?.customCategory || null),
-      playerCategory: isComplimentary ? chosenCategory : getPlayerCategory(numPlayers),
+      categoryOverride: chosenCategory,
+      customCategory: chosenCategory,
+      playerCategory: chosenCategory,
       ratePerPlayer: isComplimentary ? 0 : pricing.ratePerPlayer,
       baseTotal: pricing.baseTotal,
       offerId,
@@ -658,19 +666,32 @@ export default function BookingModal({
                 </div>
               </div>
 
-              {/* Customer Phone */}
+              {/* Customer Phone (Strictly 10 Digits Max) */}
               <div>
-                <label className="block text-xs font-black text-blue-950 mb-1">
-                  Phone Number *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-black text-blue-950">
+                    Phone Number (10 Digits) *
+                  </label>
+                  {customerPhone && (
+                    <span className={`text-[10px] font-mono font-black px-1.5 py-0.2 rounded ${
+                      customerPhone.length === 10 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
+                    }`}>
+                      {customerPhone.length}/10
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center space-x-2 bg-white border-2 border-blue-300 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 rounded-xl px-3 py-2.5 transition">
                   <Phone className="w-4 h-4 text-blue-600 shrink-0" />
                   <input
                     type="tel"
                     required
+                    maxLength={10}
                     placeholder="10-digit mobile number"
                     value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    onChange={(e) => {
+                      const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setCustomerPhone(digitsOnly);
+                    }}
                     className="bg-white font-black font-mono text-slate-950 outline-none w-full text-sm placeholder:text-slate-400"
                   />
                 </div>

@@ -422,9 +422,13 @@ export default function CalendarDashboard({
                               <h3 className="text-sm font-black text-slate-950 leading-snug">
                                 {booking.gameName}
                               </h3>
-                              <p className="text-xs font-bold text-slate-500">
-                                60 Mins • <span className="font-mono text-blue-900 font-black">{booking.players} Players</span>
-                              </p>
+                              <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                                <span className="text-xs font-bold text-slate-500">60 Mins •</span>
+                                <span className="font-mono text-blue-900 font-black text-xs">{booking.players} Players</span>
+                                <span className="text-[10px] font-black text-blue-800 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                                  {booking.playerCategory || booking.categoryOverride || getPlayerCategory(booking.players)}
+                                </span>
+                              </div>
                             </div>
                             <span className="text-xs font-mono font-black text-blue-950 bg-blue-100 px-2 py-0.5 rounded-md border border-blue-200">
                               {formatCurrency(booking.finalTotal || paidTotal)}
