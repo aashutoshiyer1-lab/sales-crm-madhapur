@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   MessageSquare,
   Copy,
@@ -170,10 +170,10 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
   const [closingStaff, setClosingStaff] = useState(initialSaved?.closingStaff || "Bhavani");
   const [customClosingStaff, setCustomClosingStaff] = useState(initialSaved?.customClosingStaff || "");
 
-  // Mummy staff tracker: Array of { name: string, count: number }
-  const [mummyActors, setMummyActors] = useState(
-    initialSaved?.mummyActors || [{ name: "Prudhvi", count: 2 }]
-  );
+  // Mummy staff tracker: Array of { name: string, count: number } - defaults to empty [] for fresh dates!
+  const [mummyActors, setMummyActors] = useState(() => {
+    return Array.isArray(initialSaved?.mummyActors) ? initialSaved.mummyActors : [];
+  });
   const [newActorName, setNewActorName] = useState("");
   const [newActorCount, setNewActorCount] = useState(1);
 
@@ -188,9 +188,9 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
   const [isPrintNotesCustomized, setIsPrintNotesCustomized] = useState(initialSaved?.isPrintNotesCustomized || false);
 
   // Manual Discount Entries added directly on Closing screen (persisted in RTDB)
-  const [manualDiscountEntries, setManualDiscountEntries] = useState(
-    initialSaved?.manualDiscountEntries || []
-  );
+  const [manualDiscountEntries, setManualDiscountEntries] = useState(() => {
+    return Array.isArray(initialSaved?.manualDiscountEntries) ? initialSaved.manualDiscountEntries : [];
+  });
 
   // Direct Editable Closing Message Mode (staff can edit any sentence/line across devices)
   const [isEditMessageMode, setIsEditMessageMode] = useState(
@@ -212,28 +212,48 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
 
   const [copiedStatus, setCopiedStatus] = useState(false);
 
-  // Sync state when closing date changes (load from LocalStorage)
+  // Guard to prevent saving previous date's in-flight state to the newly selected date
+  const loadedDateRef = useRef(closingDate);
+  const isSwitchingDateRef = useRef(false);
+
+  // Sync state when closing date changes (load from LocalStorage first for instant 0ms UI)
   useEffect(() => {
+    isSwitchingDateRef.current = true;
+    loadedDateRef.current = closingDate;
+
     const saved = getInitialClosingData(closingDate);
     if (saved) {
       setClosingStaff(saved.closingStaff || "Bhavani");
       setCustomClosingStaff(saved.customClosingStaff || "");
-      setMummyActors(saved.mummyActors || [{ name: "Prudhvi", count: 2 }]);
+      setMummyActors(Array.isArray(saved.mummyActors) ? saved.mummyActors : []);
       setExcessAmount(saved.excessAmount || "00");
       setShortAmount(saved.shortAmount || "00");
       setClosingNote(saved.closingNote || "");
       setPrintNotesText(saved.printNotesText || "");
       setIsPrintNotesCustomized(saved.isPrintNotesCustomized || false);
-      setManualDiscountEntries(saved.manualDiscountEntries || []);
+      setManualDiscountEntries(Array.isArray(saved.manualDiscountEntries) ? saved.manualDiscountEntries : []);
       setIsEditMessageMode(saved.isEditMessageMode || false);
       setCustomFullMessage(saved.customFullMessage || "");
     } else {
+      // Fresh new date: reset EVERYTHING to fresh clean state with empty mummyActors!
+      setClosingStaff("Bhavani");
+      setCustomClosingStaff("");
+      setMummyActors([]);
+      setExcessAmount("00");
+      setShortAmount("00");
+      setClosingNote("");
       setPrintNotesText("");
       setIsPrintNotesCustomized(false);
       setManualDiscountEntries([]);
       setIsEditMessageMode(false);
       setCustomFullMessage("");
     }
+
+    const timer = setTimeout(() => {
+      isSwitchingDateRef.current = false;
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, [closingDate]);
 
   // On date change, also fetch latest from Firebase directly (so refresh on laptop/phone always loads latest)
@@ -242,18 +262,31 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     const fetchLatest = async () => {
       try {
         const cloudData = await fetchClosingReportFromFirebase(closingDate);
-        if (!isCancelled && cloudData) {
-          if (cloudData.closingStaff !== undefined) setClosingStaff(cloudData.closingStaff);
-          if (cloudData.customClosingStaff !== undefined) setCustomClosingStaff(cloudData.customClosingStaff);
-          if (cloudData.mummyActors !== undefined) setMummyActors(cloudData.mummyActors);
-          if (cloudData.excessAmount !== undefined) setExcessAmount(cloudData.excessAmount);
-          if (cloudData.shortAmount !== undefined) setShortAmount(cloudData.shortAmount);
-          if (cloudData.closingNote !== undefined) setClosingNote(cloudData.closingNote);
-          if (cloudData.manualDiscountEntries !== undefined) setManualDiscountEntries(cloudData.manualDiscountEntries);
-          if (cloudData.isEditMessageMode !== undefined) setIsEditMessageMode(cloudData.isEditMessageMode);
-          if (cloudData.customFullMessage !== undefined) setCustomFullMessage(cloudData.customFullMessage);
-          if (cloudData.printNotesText !== undefined) setPrintNotesText(cloudData.printNotesText);
-          if (cloudData.isPrintNotesCustomized !== undefined) setIsPrintNotesCustomized(cloudData.isPrintNotesCustomized);
+        if (!isCancelled) {
+          if (cloudData) {
+            if (cloudData.closingStaff !== undefined) setClosingStaff(cloudData.closingStaff);
+            if (cloudData.customClosingStaff !== undefined) setCustomClosingStaff(cloudData.customClosingStaff);
+            if (cloudData.mummyActors !== undefined) {
+              setMummyActors(Array.isArray(cloudData.mummyActors) ? cloudData.mummyActors : []);
+            }
+            if (cloudData.excessAmount !== undefined) setExcessAmount(cloudData.excessAmount);
+            if (cloudData.shortAmount !== undefined) setShortAmount(cloudData.shortAmount);
+            if (cloudData.closingNote !== undefined) setClosingNote(cloudData.closingNote);
+            if (cloudData.manualDiscountEntries !== undefined) {
+              setManualDiscountEntries(Array.isArray(cloudData.manualDiscountEntries) ? cloudData.manualDiscountEntries : []);
+            }
+            if (cloudData.isEditMessageMode !== undefined) setIsEditMessageMode(cloudData.isEditMessageMode);
+            if (cloudData.customFullMessage !== undefined) setCustomFullMessage(cloudData.customFullMessage);
+            if (cloudData.printNotesText !== undefined) setPrintNotesText(cloudData.printNotesText);
+            if (cloudData.isPrintNotesCustomized !== undefined) setIsPrintNotesCustomized(cloudData.isPrintNotesCustomized);
+          } else {
+            // Fresh day in cloud: ensure mummyActors is fresh empty array if not in local storage
+            const localSaved = getInitialClosingData(closingDate);
+            if (!localSaved) {
+              setMummyActors([]);
+              setManualDiscountEntries([]);
+            }
+          }
         }
       } catch (err) {
         console.warn("Direct fetchClosingReportFromFirebase notice:", err);
@@ -265,6 +298,11 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
 
   // Real-time synchronization & persistence (LocalStorage + Firebase RTDB)
   useEffect(() => {
+    // DO NOT save if we are currently transitioning dates or if state has not aligned with closingDate!
+    if (isSwitchingDateRef.current || loadedDateRef.current !== closingDate) {
+      return;
+    }
+
     const payload = {
       closingStaff,
       customClosingStaff,
@@ -308,17 +346,18 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     try {
       const reportRef = ref(rtdb, `${CLOSING_REPORTS_PATH}/${closingDate}`);
       const unsubscribe = onValue(reportRef, (snapshot) => {
+        if (isSwitchingDateRef.current || loadedDateRef.current !== closingDate) return;
         const data = snapshot.val();
         if (data) {
           if (data.closingStaff !== undefined) setClosingStaff(data.closingStaff);
           if (data.customClosingStaff !== undefined) setCustomClosingStaff(data.customClosingStaff);
-          if (data.mummyActors !== undefined) setMummyActors(data.mummyActors);
+          if (data.mummyActors !== undefined) setMummyActors(Array.isArray(data.mummyActors) ? data.mummyActors : []);
           if (data.excessAmount !== undefined) setExcessAmount(data.excessAmount);
           if (data.shortAmount !== undefined) setShortAmount(data.shortAmount);
           if (data.closingNote !== undefined) setClosingNote(data.closingNote);
           if (data.printNotesText !== undefined) setPrintNotesText(data.printNotesText);
           if (data.isPrintNotesCustomized !== undefined) setIsPrintNotesCustomized(data.isPrintNotesCustomized);
-          if (data.manualDiscountEntries !== undefined) setManualDiscountEntries(data.manualDiscountEntries);
+          if (data.manualDiscountEntries !== undefined) setManualDiscountEntries(Array.isArray(data.manualDiscountEntries) ? data.manualDiscountEntries : []);
           if (data.isEditMessageMode !== undefined) setIsEditMessageMode(data.isEditMessageMode);
           if (data.customFullMessage !== undefined) setCustomFullMessage(data.customFullMessage);
         }
@@ -912,42 +951,48 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
 
             {/* Active Mummy Actors List */}
             <div className="space-y-2">
-              {mummyActors.map((actor, idx) => (
-                <div key={idx} className="flex items-center justify-between bg-blue-50 border-2 border-blue-200 p-2.5 rounded-xl text-xs font-black">
-                  <div className="flex items-center space-x-2">
-                    <User className="w-4 h-4 text-blue-600" />
-                    <span className="text-blue-950 text-sm">{actor.name}</span>
-                    <span className="text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-300">
-                      ×{actor.count} times
-                    </span>
-                  </div>
-
-                  <div className="flex items-center space-x-1.5">
-                    <button
-                      type="button"
-                      onClick={() => handleActorCountChange(idx, -1)}
-                      className="w-7 h-7 rounded-lg bg-white hover:bg-blue-100 border border-blue-300 text-blue-900 flex items-center justify-center font-black active:scale-95"
-                    >
-                      -
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleActorCountChange(idx, 1)}
-                      className="w-7 h-7 rounded-lg bg-white hover:bg-blue-100 border border-blue-300 text-blue-900 flex items-center justify-center font-black active:scale-95"
-                    >
-                      +
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveMummyActor(idx)}
-                      className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg ml-1"
-                      title="Remove"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+              {mummyActors.length === 0 ? (
+                <div className="p-3 bg-blue-50/60 border-2 border-dashed border-blue-200 rounded-xl text-xs font-bold text-slate-500 text-center">
+                  No mummy staff added for this date (message will show &quot;None&quot;). Select or type staff below to add.
                 </div>
-              ))}
+              ) : (
+                mummyActors.map((actor, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-blue-50 border-2 border-blue-200 p-2.5 rounded-xl text-xs font-black">
+                    <div className="flex items-center space-x-2">
+                      <User className="w-4 h-4 text-blue-600" />
+                      <span className="text-blue-950 text-sm">{actor.name}</span>
+                      <span className="text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-300">
+                        ×{actor.count} times
+                      </span>
+                    </div>
+
+                    <div className="flex items-center space-x-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleActorCountChange(idx, -1)}
+                        className="w-7 h-7 rounded-lg bg-white hover:bg-blue-100 border border-blue-300 text-blue-900 flex items-center justify-center font-black active:scale-95"
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleActorCountChange(idx, 1)}
+                        className="w-7 h-7 rounded-lg bg-white hover:bg-blue-100 border border-blue-300 text-blue-900 flex items-center justify-center font-black active:scale-95"
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMummyActor(idx)}
+                        className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg ml-1"
+                        title="Remove"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
 
             {/* Add New Mummy Staff */}
