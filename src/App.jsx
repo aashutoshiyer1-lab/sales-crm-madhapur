@@ -393,6 +393,7 @@ export default function App() {
         bookingToEdit={bookingToEdit}
         defaultDate={bookingSlotDefaults.date}
         defaultSlot={bookingSlotDefaults.timeSlot}
+        bookings={bookings}
       />
 
       {/* Receipt Modal */}

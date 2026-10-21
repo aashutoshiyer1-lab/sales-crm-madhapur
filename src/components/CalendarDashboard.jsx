@@ -23,7 +23,9 @@ import {
   parseTimeToMinutes,
   isComplimentaryBooking,
   MODES_REQUIRING_SCREENSHOT,
-  GAMES
+  GAMES,
+  shiftDateString,
+  getTodayDateString
 } from '../config/venueData';
 import { formatCurrency, getPaidTotal } from '../utils/pricingEngine';
 
@@ -125,17 +127,13 @@ export default function CalendarDashboard({
     };
   }, [dateBookings, pendingEntries]);
 
-  // Date Navigation Helpers
+  // Date Navigation Helpers (Strictly shifts exactly 1 day with no UTC timezone offset jump!)
   const handleShiftDate = (days) => {
-    const current = new Date(selectedDate + 'T00:00:00');
-    current.setDate(current.getDate() + days);
-    const newDateStr = current.toISOString().split('T')[0];
-    setSelectedDate(newDateStr);
+    setSelectedDate(shiftDateString(selectedDate, days));
   };
 
   const handleJumpToToday = () => {
-    const today = new Date().toISOString().split('T')[0];
-    setSelectedDate(today);
+    setSelectedDate(getTodayDateString());
   };
 
   // Jump to slot card and open edit modal

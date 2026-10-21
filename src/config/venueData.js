@@ -329,6 +329,32 @@ export const parseTimeToMinutes = (timeStr) => {
 };
 
 /**
+ * Safely gets today's date string (YYYY-MM-DD) in local browser time
+ */
+export const getTodayDateString = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * Safely shifts a YYYY-MM-DD date string by +/- days without UTC/ISO timezone shifting bugs!
+ */
+export const shiftDateString = (dateStr, days = 0) => {
+  if (!dateStr) return getTodayDateString();
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return dateStr;
+  const dateObj = new Date(y, m - 1, d);
+  dateObj.setDate(dateObj.getDate() + Number(days));
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
  * Returns whether given date string (YYYY-MM-DD) or Date object is Weekend (Sat or Sun)
  */
 export const isWeekend = (dateInput) => {

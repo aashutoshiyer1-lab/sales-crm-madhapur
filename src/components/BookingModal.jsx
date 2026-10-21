@@ -29,7 +29,9 @@ import {
   getTimeSlotGroups,
   isWeekend,
   getPlayerCategory,
-  getBookingCategory
+  getBookingCategory,
+  shiftDateString,
+  getTodayDateString
 } from '../config/venueData';
 import { calculatePricing, formatCurrency, getPaidTotal } from '../utils/pricingEngine';
 
@@ -110,7 +112,8 @@ export default function BookingModal({
   onSave,
   bookingToEdit,
   defaultDate,
-  defaultSlot
+  defaultSlot,
+  bookings = []
 }) {
   if (!isOpen) return null;
 
@@ -292,6 +295,8 @@ export default function BookingModal({
     }
   };
 
+  const selectedOfferObj = useMemo(() => OFFERS.find(o => o.id === offerId), [offerId]);
+
   // Determine active tier automatically based on entered players
   const activeTier = useMemo(() => {
     const count = Number(players);
@@ -300,6 +305,55 @@ export default function BookingModal({
     if (count <= 6) return '4-6';
     return '7+';
   }, [players]);
+
+  // Detect companion booking of the same customer on this date to auto-determine complimentary player category
+  const companionBooking = useMemo(() => {
+    if (!Array.isArray(bookings) || bookings.length === 0) return null;
+    const cleanPhone = (customerPhone || '').replace(/\D/g, '');
+    const cleanName = (customerName || '').trim().toLowerCase();
+
+    return bookings.find(b => {
+      if (!b || (bookingToEdit && b.id === bookingToEdit.id)) return false;
+      if (b.date !== date) return false;
+      const isPaid = (Number(b.finalTotal) > 0) || (b.offerId !== 'complimentary' && Number(b.discountPercent) !== 100);
+      if (!isPaid) return false;
+
+      const bPhone = (b.customerPhone || '').replace(/\D/g, '');
+      const bName = (b.customerName || '').trim().toLowerCase();
+
+      // 1. Same phone number (at least 6 digits match)
+      if (cleanPhone.length >= 6 && bPhone.length >= 6 && (bPhone.includes(cleanPhone) || cleanPhone.includes(bPhone))) {
+        return true;
+      }
+      // 2. Same customer name (at least 3 characters)
+      if (cleanName.length >= 3 && bName.length >= 3 && (bName.includes(cleanName) || cleanName.includes(bName))) {
+        return true;
+      }
+      // 3. Same game and same time slot
+      if (timeSlot && b.timeSlot === timeSlot && gameName && (b.gameName || '').toLowerCase() === gameName.toLowerCase()) {
+        return true;
+      }
+      return false;
+    });
+  }, [bookings, customerPhone, customerName, date, timeSlot, gameName, bookingToEdit]);
+
+  const companionCategory = useMemo(() => {
+    if (!companionBooking) return null;
+    return (
+      companionBooking.categoryOverride ||
+      companionBooking.customCategory ||
+      companionBooking.playerCategory ||
+      getPlayerCategory(companionBooking.players)
+    );
+  }, [companionBooking]);
+
+  // Auto-select category for complimentary bookings based on companion booking
+  useEffect(() => {
+    const isComp = offerId === 'complimentary' || selectedOfferObj?.isComplimentary;
+    if (isComp && companionCategory) {
+      setCategoryOverride(companionCategory);
+    }
+  }, [offerId, selectedOfferObj, companionCategory]);
 
   // Sync timeSlot if available slots change, BUT NEVER overwrite custom walk-in time when changing dates!
   useEffect(() => {
@@ -406,15 +460,13 @@ export default function BookingModal({
     setPlayers(next);
   };
 
-  // Quick Date Jump
+  // Quick Date Jump (Strictly shifts 1 day with no timezone offset jumping)
   const handleShiftDate = (days) => {
-    const d = new Date(date + 'T00:00:00');
-    d.setDate(d.getDate() + days);
-    setDate(d.toISOString().split('T')[0]);
+    setDate(shiftDateString(date, days));
   };
 
   const handleSetToday = () => {
-    setDate(new Date().toISOString().split('T')[0]);
+    setDate(getTodayDateString());
   };
 
   // Submit Handler
@@ -520,8 +572,6 @@ export default function BookingModal({
     setShowComplimentaryCategoryConfirm(false);
     onClose();
   };
-
-  const selectedOfferObj = useMemo(() => OFFERS.find(o => o.id === offerId), [offerId]);
 
   // Options for custom dropdowns
   const slotOptions = useMemo(() => {
@@ -1049,6 +1099,61 @@ export default function BookingModal({
               </div>
             )}
 
+            {/* Complimentary Game Category Bracket Selection (Supports any category even for 2 or 3 kids) */}
+            {(offerId === 'complimentary' || selectedOfferObj?.isComplimentary) && (
+              <div className="p-4 bg-amber-50/90 rounded-2xl border-2 border-amber-300 space-y-2.5 animate-fadeIn">
+                <div className="flex flex-wrap items-center justify-between gap-1.5">
+                  <div>
+                    <span className="text-xs font-black text-amber-950 flex items-center space-x-1.5">
+                      <ShieldAlert className="w-4 h-4 text-amber-700" />
+                      <span>Complimentary Player Category Bracket (100% OFF)</span>
+                    </span>
+                    <p className="text-[11px] font-bold text-amber-800">
+                      Kids under 5 play complimentary (₹0) with their accompanying group. Select group category:
+                    </p>
+                  </div>
+                  {companionBooking && (
+                    <span className="text-[10px] font-black bg-blue-600 text-white px-2.5 py-1 rounded-full shadow-2xs flex items-center space-x-1">
+                      <span>✨ Auto-Selected: {companionBooking.customerName || 'Companion'}</span>
+                      <span className="bg-white/25 px-1.5 py-0.2 rounded font-mono">{companionCategory}</span>
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: '2–3 Players', label: '2–3 Players', desc: 'Small Group' },
+                    { id: '4–6 Players', label: '4–6 Players', desc: 'Family / Standard', badge: 'Recommended' },
+                    { id: '7+ Players', label: '7+ Players', desc: 'Large Group' }
+                  ].map(cat => {
+                    const isSelected = categoryOverride === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setCategoryOverride(cat.id)}
+                        className={`p-3 rounded-xl border-2 text-center transition flex flex-col items-center justify-center relative cursor-pointer ${
+                          isSelected
+                            ? 'border-blue-600 bg-blue-600 text-white shadow-md ring-2 ring-blue-400/40'
+                            : 'border-amber-200 bg-white hover:bg-amber-100/60 text-slate-900'
+                        }`}
+                      >
+                        {cat.badge && !isSelected && (
+                          <span className="absolute -top-2 px-1.5 py-0.2 bg-amber-600 text-[8px] font-black text-white rounded-full">
+                            {cat.badge}
+                          </span>
+                        )}
+                        <span className="text-xs font-black block">{cat.label}</span>
+                        <span className={`text-[10px] font-bold mt-0.5 ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
+                          {cat.desc}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Custom Reference Name Input if selected */}
             {refType === 'custom' && (
               <div className="p-3 bg-white rounded-xl border-2 border-blue-500 animate-fadeIn">
@@ -1335,6 +1440,16 @@ export default function BookingModal({
                 <div className="flex justify-between">
                   <span className="font-bold">Customer:</span>
                   <span className="font-black text-slate-950">{customerName || 'N/A'}</span>
+                </div>
+                {companionBooking && (
+                  <div className="flex justify-between">
+                    <span className="font-bold">Companion Group:</span>
+                    <span className="font-black text-blue-700">{companionBooking.customerName} ({companionCategory})</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="font-bold">Selected Category:</span>
+                  <span className="font-black text-blue-900 bg-blue-100 px-2 py-0.2 rounded font-mono">{categoryOverride || '4–6 Players'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="font-bold">Room:</span>

@@ -23,7 +23,14 @@ import {
   PlusCircle
 } from 'lucide-react';
 import { getPaidTotal, getBookingCategory } from '../utils/pricingEngine';
-import { STAFF_ROSTER, GAMES, OFFERS, isComplimentaryBooking } from '../config/venueData';
+import {
+  STAFF_ROSTER,
+  GAMES,
+  OFFERS,
+  isComplimentaryBooking,
+  shiftDateString,
+  getTodayDateString
+} from '../config/venueData';
 import {
   rtdb,
   ref,
@@ -497,17 +504,15 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     });
   };
 
-  // Date Shift Helpers
+  // Date Shift Helpers (Strictly 1 day shift with no timezone offset jumping)
   const handleShiftDate = (days) => {
-    const d = new Date(closingDate + 'T00:00:00');
-    d.setDate(d.getDate() + days);
-    const newDateStr = d.toISOString().split('T')[0];
-    setClosingDate(newDateStr);
-    if (setSelectedDate) setSelectedDate(newDateStr);
+    const nextDate = shiftDateString(closingDate, days);
+    setClosingDate(nextDate);
+    if (setSelectedDate) setSelectedDate(nextDate);
   };
 
   const handleSetToday = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateString();
     setClosingDate(today);
     if (setSelectedDate) setSelectedDate(today);
   };
