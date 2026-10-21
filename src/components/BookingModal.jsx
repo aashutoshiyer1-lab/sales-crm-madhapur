@@ -367,6 +367,19 @@ export default function BookingModal({
   }, [date, isCustomTime, slotGroups]);
 
   const isWeekendRate = rateType === 'weekend';
+  const isComplimentary = Boolean(offerId === 'complimentary' || selectedOfferObj?.isComplimentary);
+
+  const isTier1Active = isComplimentary
+    ? (categoryOverride.includes('2') || categoryOverride.includes('3'))
+    : (activeTier === '2-3');
+
+  const isTier2Active = isComplimentary
+    ? (categoryOverride.includes('4') || categoryOverride.includes('5') || categoryOverride.includes('6'))
+    : (activeTier === '4-6');
+
+  const isTier3Active = isComplimentary
+    ? categoryOverride.includes('7')
+    : (activeTier === '7+');
 
   // Pricing calculation
   const pricing = useMemo(() => {
@@ -832,9 +845,13 @@ export default function BookingModal({
               </h3>
               <div className="flex items-center space-x-2">
                 <span className="text-[11px] font-black text-blue-900 bg-blue-100 px-3 py-1 rounded-full border border-blue-300">
-                  Category: <strong>{getPlayerCategory(players)}</strong>
+                  Category: <strong>{isComplimentary ? (categoryOverride || '4–6 Players') : getPlayerCategory(players)}</strong>
                 </span>
-                {activeTier && (
+                {isComplimentary ? (
+                  <span className="text-[11px] font-black text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-300">
+                    Complimentary (100% Free)
+                  </span>
+                ) : activeTier && (
                   <span className="text-[11px] font-black text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-300">
                     Tier: {activeTier}
                   </span>
@@ -947,71 +964,95 @@ export default function BookingModal({
               <div className="md:col-span-7 grid grid-cols-3 gap-2">
                 {/* Tier 1: 2-3 Players */}
                 <div
-                  onClick={() => setPlayers(2)}
+                  onClick={() => {
+                    if (isComplimentary) {
+                      setCategoryOverride('2–3 Players');
+                    } else {
+                      setPlayers(2);
+                    }
+                  }}
                   className={`p-3 rounded-2xl border-2 transition-all cursor-pointer ${
-                    activeTier === '2-3'
+                    isTier1Active
                       ? 'bg-blue-600 text-white border-blue-700 shadow-md ring-2 ring-blue-400/50'
                       : 'bg-white text-slate-900 border-blue-200 hover:border-blue-400'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className={`text-xs font-black ${activeTier === '2-3' ? 'text-white' : 'text-slate-950'}`}>2–3 Players</span>
-                    {activeTier === '2-3' && (
+                    <span className={`text-xs font-black ${isTier1Active ? 'text-white' : 'text-slate-950'}`}>2–3 Players</span>
+                    {isTier1Active && (
                       <span className="text-[9px] font-black bg-white text-blue-900 px-1.5 py-0.2 rounded shadow-xs">
                         ✓ ACTIVE
                       </span>
                     )}
                   </div>
-                  <p className={`text-base font-black font-mono mt-1 ${activeTier === '2-3' ? 'text-white' : 'text-blue-950'}`}>
-                    {isWeekendRate ? '₹1,099' : '₹999'}
+                  <p className={`text-base font-black font-mono mt-1 ${isTier1Active ? 'text-white' : 'text-blue-950'}`}>
+                    {isComplimentary ? '₹0' : (isWeekendRate ? '₹1,099' : '₹999')}
                   </p>
-                  <span className={`text-[10px] font-bold ${activeTier === '2-3' ? 'text-blue-100' : 'text-blue-700'}`}>per player</span>
+                  <span className={`text-[10px] font-bold ${isTier1Active ? 'text-blue-100' : 'text-blue-700'}`}>
+                    {isComplimentary ? 'Complimentary' : 'per player'}
+                  </span>
                 </div>
 
                 {/* Tier 2: 4-6 Players */}
                 <div
-                  onClick={() => setPlayers(4)}
+                  onClick={() => {
+                    if (isComplimentary) {
+                      setCategoryOverride('4–6 Players');
+                    } else {
+                      setPlayers(4);
+                    }
+                  }}
                   className={`p-3 rounded-2xl border-2 transition-all cursor-pointer ${
-                    activeTier === '4-6'
+                    isTier2Active
                       ? 'bg-blue-600 text-white border-blue-700 shadow-md ring-2 ring-blue-400/50'
                       : 'bg-white text-slate-900 border-blue-200 hover:border-blue-400'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className={`text-xs font-black ${activeTier === '4-6' ? 'text-white' : 'text-slate-950'}`}>4–6 Players</span>
-                    {activeTier === '4-6' && (
+                    <span className={`text-xs font-black ${isTier2Active ? 'text-white' : 'text-slate-950'}`}>4–6 Players</span>
+                    {isTier2Active && (
                       <span className="text-[9px] font-black bg-white text-blue-900 px-1.5 py-0.2 rounded shadow-xs">
                         ✓ ACTIVE
                       </span>
                     )}
                   </div>
-                  <p className={`text-base font-black font-mono mt-1 ${activeTier === '4-6' ? 'text-white' : 'text-blue-950'}`}>
-                    {isWeekendRate ? '₹999' : '₹899'}
+                  <p className={`text-base font-black font-mono mt-1 ${isTier2Active ? 'text-white' : 'text-blue-950'}`}>
+                    {isComplimentary ? '₹0' : (isWeekendRate ? '₹999' : '₹899')}
                   </p>
-                  <span className={`text-[10px] font-bold ${activeTier === '4-6' ? 'text-blue-100' : 'text-blue-700'}`}>per player</span>
+                  <span className={`text-[10px] font-bold ${isTier2Active ? 'text-blue-100' : 'text-blue-700'}`}>
+                    {isComplimentary ? 'Complimentary' : 'per player'}
+                  </span>
                 </div>
 
                 {/* Tier 3: 7+ Players */}
                 <div
-                  onClick={() => setPlayers(7)}
+                  onClick={() => {
+                    if (isComplimentary) {
+                      setCategoryOverride('7+ Players');
+                    } else {
+                      setPlayers(7);
+                    }
+                  }}
                   className={`p-3 rounded-2xl border-2 transition-all cursor-pointer ${
-                    activeTier === '7+'
+                    isTier3Active
                       ? 'bg-blue-600 text-white border-blue-700 shadow-md ring-2 ring-blue-400/50'
                       : 'bg-white text-slate-900 border-blue-200 hover:border-blue-400'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className={`text-xs font-black ${activeTier === '7+' ? 'text-white' : 'text-slate-950'}`}>7+ Players</span>
-                    {activeTier === '7+' && (
+                    <span className={`text-xs font-black ${isTier3Active ? 'text-white' : 'text-slate-950'}`}>7+ Players</span>
+                    {isTier3Active && (
                       <span className="text-[9px] font-black bg-white text-blue-900 px-1.5 py-0.2 rounded shadow-xs">
                         ✓ ACTIVE
                       </span>
                     )}
                   </div>
-                  <p className={`text-base font-black font-mono mt-1 ${activeTier === '7+' ? 'text-white' : 'text-blue-950'}`}>
-                    {isWeekendRate ? '₹899' : '₹799'}
+                  <p className={`text-base font-black font-mono mt-1 ${isTier3Active ? 'text-white' : 'text-blue-950'}`}>
+                    {isComplimentary ? '₹0' : (isWeekendRate ? '₹899' : '₹799')}
                   </p>
-                  <span className={`text-[10px] font-bold ${activeTier === '7+' ? 'text-blue-100' : 'text-blue-700'}`}>per player</span>
+                  <span className={`text-[10px] font-bold ${isTier3Active ? 'text-blue-100' : 'text-blue-700'}`}>
+                    {isComplimentary ? 'Complimentary' : 'per player'}
+                  </span>
                 </div>
               </div>
 
