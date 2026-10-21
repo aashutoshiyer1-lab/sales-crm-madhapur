@@ -16,7 +16,8 @@ import {
   Plus,
   Minus,
   ChevronDown,
-  Check
+  Check,
+  ShieldAlert
 } from 'lucide-react';
 import {
   GAMES,
@@ -27,7 +28,8 @@ import {
   generateTimeSlots,
   getTimeSlotGroups,
   isWeekend,
-  getPlayerCategory
+  getPlayerCategory,
+  getBookingCategory
 } from '../config/venueData';
 import { calculatePricing, formatCurrency, getPaidTotal } from '../utils/pricingEngine';
 
@@ -196,6 +198,12 @@ export default function BookingModal({
     return initial;
   });
 
+  // Complimentary Game Category Cross-Verification Modal State
+  const [showComplimentaryCategoryConfirm, setShowComplimentaryCategoryConfirm] = useState(false);
+  const [categoryOverride, setCategoryOverride] = useState(() => {
+    return bookingToEdit?.categoryOverride || bookingToEdit?.customCategory || '4–6 Players';
+  });
+
   // Real-time synchronization when bookingToEdit prop changes
   useEffect(() => {
     if (bookingToEdit) {
@@ -207,6 +215,7 @@ export default function BookingModal({
       setGameName(bookingToEdit.gameName || '');
       setPlayers(bookingToEdit.players || '');
       setOfferId(bookingToEdit.offerId || 'none');
+      setCategoryOverride(bookingToEdit.categoryOverride || bookingToEdit.customCategory || '4–6 Players');
       
       const off = OFFERS.find(o => o.id === (bookingToEdit.offerId || 'none'));
       setDiscountPercent(
@@ -428,18 +437,21 @@ export default function BookingModal({
     }
 
     const selectedOfferObj = OFFERS.find(o => o.id === offerId);
-    const numPlayers = Number(players) || 1;
+    const isComplimentary = Boolean(selectedOfferObj?.isComplimentary || offerId === 'complimentary');
 
-    // Prompt/confirm pax bracket category for complimentary game (Kids Under 5 Years)
-    if (selectedOfferObj?.isComplimentary || offerId === 'complimentary') {
-      const tierCategory = getPlayerCategory(numPlayers);
-      const confirmed = window.confirm(
-        `Confirm Complimentary Game (100% OFF) for ${numPlayers} player(s) in category: ${tierCategory}?`
-      );
-      if (!confirmed) {
-        return;
-      }
+    // Prompt/confirm pax bracket category for complimentary game (Kids Under 5 Years) via interactive Modal
+    if (isComplimentary) {
+      setShowComplimentaryCategoryConfirm(true);
+      return;
     }
+
+    executeSaveBooking(null);
+  };
+
+  const executeSaveBooking = (confirmedCategory = null) => {
+    const selectedOfferObj = OFFERS.find(o => o.id === offerId);
+    const isComplimentary = Boolean(selectedOfferObj?.isComplimentary || offerId === 'complimentary');
+    const numPlayers = Number(players) || 1;
 
     let finalReference = '';
     if ((APPROVAL_REFERENCES || []).includes(refType)) {
@@ -450,6 +462,10 @@ export default function BookingModal({
     // Safety check: ensure 900 / Nayeem reference is completely stripped
     finalReference = finalReference.replace(/nayeem\s*sir|900/gi, '').trim();
 
+    if (isComplimentary && !finalReference) {
+      finalReference = 'Khaja Sir';
+    }
+
     const cleanPayments = {};
     PAYMENT_MODES.forEach(m => {
       const val = Number(payments[m]) || 0;
@@ -458,15 +474,16 @@ export default function BookingModal({
 
     const isFullyPaid = paidTotal >= pricing.finalTotal && pricing.finalTotal > 0;
 
-    // Check if entry has 0 payment and is not marked as advance/pending
-    if (paidTotal === 0 && !isPending && pricing.finalTotal > 0) {
+    // Check if entry has 0 payment and is not marked as advance/pending (skip check for 100% complimentary!)
+    if (!isComplimentary && paidTotal === 0 && !isPending && pricing.finalTotal > 0) {
       alert("No payment was recorded. Please check 'Mark as Advance / Pending Payment' on the left or enter payment amounts before confirming.");
       return;
     }
 
-    const shouldMarkPending = isPending || (!isFullyPaid && pricing.finalTotal > 0);
-
+    const shouldMarkPending = !isComplimentary && (isPending || (!isFullyPaid && pricing.finalTotal > 0));
     const trimmedCustomReason = customDiscountReason.trim();
+
+    const chosenCategory = confirmedCategory || categoryOverride || getPlayerCategory(numPlayers);
 
     const bookingData = {
       id: bookingToEdit?.id || `ETM-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -478,26 +495,29 @@ export default function BookingModal({
       isWeekendRate: isWeekendRate,
       gameName,
       players: numPlayers,
-      playerCategory: getPlayerCategory(numPlayers),
-      ratePerPlayer: pricing.ratePerPlayer,
+      categoryOverride: isComplimentary ? chosenCategory : (bookingToEdit?.categoryOverride || null),
+      customCategory: isComplimentary ? chosenCategory : (bookingToEdit?.customCategory || null),
+      playerCategory: isComplimentary ? chosenCategory : getPlayerCategory(numPlayers),
+      ratePerPlayer: isComplimentary ? 0 : pricing.ratePerPlayer,
       baseTotal: pricing.baseTotal,
       offerId,
       offerName: selectedOfferObj ? selectedOfferObj.name : 'None',
       customDiscountReason: trimmedCustomReason,
       customNote: trimmedCustomReason || notes.trim(),
-      discountPercent: pricing.discountPercent,
-      discountAmount: pricing.discountAmount,
-      finalTotal: pricing.finalTotal,
+      discountPercent: isComplimentary ? 100 : pricing.discountPercent,
+      discountAmount: isComplimentary ? pricing.baseTotal : pricing.discountAmount,
+      finalTotal: isComplimentary ? 0 : pricing.finalTotal,
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim(),
       notes: notes.trim(),
-      reference: finalReference,
-      payments: cleanPayments,
+      reference: finalReference || (isComplimentary ? 'Khaja Sir' : ''),
+      payments: isComplimentary ? {} : cleanPayments,
       isPending: shouldMarkPending,
       paymentStatus: shouldMarkPending ? 'pending' : 'paid'
     };
 
     onSave(bookingData);
+    setShowComplimentaryCategoryConfirm(false);
     onClose();
   };
 
@@ -1248,6 +1268,108 @@ export default function BookingModal({
           </div>
 
         </form>
+
+        {/* Complimentary Game Category Cross-Verification Modal */}
+        {showComplimentaryCategoryConfirm && (
+          <div className="fixed inset-0 z-[70] bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border-4 border-amber-400 space-y-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md">
+                  <ShieldAlert className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-950">
+                    Cross-Verify Category Bracket
+                  </h3>
+                  <p className="text-xs font-bold text-amber-800">
+                    Complimentary Game • Kids Under 5 Years (100% OFF)
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-amber-50 rounded-2xl border-2 border-amber-200 text-xs font-medium text-amber-950 space-y-1">
+                <p>
+                  Kids under 5 play complimentary (100% OFF) with their family or group.
+                </p>
+                <p className="font-bold text-slate-900">
+                  Please confirm which player bracket category this group belongs to:
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 block">
+                  Select Category Bracket:
+                </span>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: '2–3 Players', label: '2–3 Players', desc: 'Small Group' },
+                    { id: '4–6 Players', label: '4–6 Players', desc: 'Smart Default', badge: 'Recommended' },
+                    { id: '7+ Players', label: '7+ Players', desc: 'Large Group' }
+                  ].map(cat => {
+                    const isSelected = categoryOverride === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setCategoryOverride(cat.id)}
+                        className={`p-2.5 rounded-2xl border-2 text-center transition flex flex-col items-center justify-center relative ${
+                          isSelected
+                            ? 'border-blue-600 bg-blue-50 text-blue-950 shadow-md ring-2 ring-blue-500/20'
+                            : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        {cat.badge && (
+                          <span className="absolute -top-2 px-1.5 py-0.2 bg-blue-600 text-[9px] font-black text-white rounded-full">
+                            {cat.badge}
+                          </span>
+                        )}
+                        <span className="text-xs font-black block mt-0.5">{cat.label}</span>
+                        <span className="text-[10px] font-bold text-slate-500">{cat.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1 text-slate-700">
+                <div className="flex justify-between">
+                  <span className="font-bold">Customer:</span>
+                  <span className="font-black text-slate-950">{customerName || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-bold">Room:</span>
+                  <span className="font-black text-slate-950">{gameName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-bold">Reference:</span>
+                  <span className="font-black text-blue-800">Khaja Sir (Auto)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-bold">Total Amount:</span>
+                  <span className="font-black text-emerald-700">₹0 (100% OFF)</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowComplimentaryCategoryConfirm(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Back / Change
+                </button>
+                <button
+                  type="button"
+                  onClick={() => executeSaveBooking(categoryOverride)}
+                  className="px-5 py-2 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow-md transition active:scale-95 flex items-center space-x-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Confirm & Save Game</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

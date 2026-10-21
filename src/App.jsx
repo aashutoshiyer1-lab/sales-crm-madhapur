@@ -134,13 +134,22 @@ export default function App() {
     return localStorage.getItem(AUTH_STORAGE_KEY) === 'true';
   });
 
-  // Current View: 'calendar' or 'sales'
+  // Current View: 'calendar' or 'sales' or 'closing'
   const [currentView, setCurrentView] = useState('calendar');
+  const [viewKey, setViewKey] = useState(0);
 
   // Selected Date (defaults to Today YYYY-MM-DD)
   const [selectedDate, setSelectedDate] = useState(() => {
     return new Date().toISOString().split('T')[0];
   });
+
+  // Whenever switching views, ALWAYS reset date to Today's date!
+  const handleViewChange = useCallback((newView) => {
+    const today = new Date().toISOString().split('T')[0];
+    setSelectedDate(today);
+    setCurrentView(newView);
+    setViewKey(prev => prev + 1);
+  }, []);
 
   // Bookings State initialized from LocalStorage or Sample
   const [bookings, setBookings] = useState(() => {
@@ -334,7 +343,7 @@ export default function App() {
       {/* Top Navigation Bar */}
       <Navbar
         currentView={currentView}
-        setCurrentView={setCurrentView}
+        setCurrentView={handleViewChange}
         onOpenNewBooking={() => handleOpenNewBooking()}
         isFirebaseActive={isFirebaseActive}
         isSyncing={isSyncing}
@@ -345,6 +354,7 @@ export default function App() {
       <main className="flex-1 pb-16">
         {currentView === 'calendar' && (
           <CalendarDashboard
+            key={`calendar-${viewKey}`}
             bookings={bookings}
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
@@ -357,6 +367,7 @@ export default function App() {
         )}
         {currentView === 'sales' && (
           <SalesDashboard
+            key={`sales-${viewKey}`}
             bookings={bookings}
             onOpenBookingModal={handleOpenEditBooking}
             onOpenDetailModal={handleOpenDetail}
@@ -365,6 +376,7 @@ export default function App() {
         )}
         {currentView === 'closing' && (
           <ClosingMessageGenerator
+            key={`closing-${viewKey}`}
             bookings={bookings}
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}

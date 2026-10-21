@@ -160,6 +160,65 @@ export const getPlayerCategory = (playerCount) => {
   return '7+ Players';
 };
 
+/**
+ * Resolves player bracket category for any booking:
+ * 1. Checks explicit categoryOverride or customCategory
+ * 2. Sibling paid booking inheritance (same date, room & slot or matching customer phone)
+ * 3. Fallback: >= 7 -> '7+ Players', >= 4 -> '4–6 Players', complimentary -> '4–6 Players', else '2–3 Players'
+ */
+export const getBookingCategory = (booking, allBookings = []) => {
+  if (!booking) return 'Not Set';
+
+  // 1. Direct explicit category override
+  const override = booking.categoryOverride || booking.customCategory;
+  if (override) {
+    const raw = String(override).trim();
+    if (raw.includes('2') || raw.includes('3')) return '2–3 Players';
+    if (raw.includes('4') || raw.includes('5') || raw.includes('6')) return '4–6 Players';
+    if (raw.includes('7')) return '7+ Players';
+    return raw;
+  }
+
+  const isComp = (
+    booking.offerId === 'complimentary' ||
+    Number(booking.discountPercent) === 100 ||
+    booking.finalTotal === 0 ||
+    (booking.offerName && booking.offerName.toLowerCase().includes('complimentary')) ||
+    (booking.notes && booking.notes.toLowerCase().includes('complimentary'))
+  );
+
+  // 2. Sibling paid booking inheritance
+  if (isComp && Array.isArray(allBookings) && allBookings.length > 0) {
+    const sibling = allBookings.find(b => {
+      if (!b || b.id === booking.id) return false;
+      const sameDate = b.date === booking.date;
+      const sameRoom = (b.gameName || '').toLowerCase() === (booking.gameName || '').toLowerCase();
+      const sameSlot = b.timeSlot === booking.timeSlot;
+      const samePhone = booking.customerPhone && b.customerPhone && b.customerPhone.trim() === booking.customerPhone.trim();
+      const isPaid = (Number(b.finalTotal) > 0) || (b.offerId !== 'complimentary' && Number(b.discountPercent) !== 100);
+      return sameDate && isPaid && ((sameRoom && sameSlot) || (samePhone && sameRoom));
+    });
+
+    if (sibling) {
+      if (sibling.categoryOverride || sibling.customCategory) {
+        return getBookingCategory(sibling, []);
+      }
+      const sibPax = Number(sibling.players) || 0;
+      if (sibPax >= 7) return '7+ Players';
+      if (sibPax >= 4) return '4–6 Players';
+      if (sibPax > 0) return '2–3 Players';
+    }
+  }
+
+  // 3. Fallback
+  const pax = Number(booking.players) || 0;
+  if (pax >= 7) return '7+ Players';
+  if (pax >= 4) return '4–6 Players';
+  if (isComp) return '4–6 Players';
+  if (pax > 0) return '2–3 Players';
+  return 'Not Set';
+};
+
 export const GAMES = [
   {
     id: "bank-heist",

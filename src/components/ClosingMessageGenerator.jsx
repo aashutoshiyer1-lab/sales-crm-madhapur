@@ -22,8 +22,8 @@ import {
   Eye,
   PlusCircle
 } from 'lucide-react';
-import { getPaidTotal } from '../utils/pricingEngine';
-import { STAFF_ROSTER, GAMES, OFFERS } from '../config/venueData';
+import { getPaidTotal, getBookingCategory } from '../utils/pricingEngine';
+import { STAFF_ROSTER, GAMES, OFFERS, isComplimentaryBooking } from '../config/venueData';
 import {
   rtdb,
   ref,
@@ -156,6 +156,13 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
   const [closingDate, setClosingDate] = useState(
     selectedDate || new Date().toISOString().split('T')[0]
   );
+
+  // Synchronize closingDate whenever selectedDate updates (ensures returning to view always shows current date)
+  useEffect(() => {
+    if (selectedDate) {
+      setClosingDate(selectedDate);
+    }
+  }, [selectedDate]);
 
   const initialSaved = useMemo(() => getInitialClosingData(closingDate), [closingDate]);
 
@@ -332,12 +339,13 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
   // Game 2: Mummy (Curse of the Mummy)
   // Game 3: Prison (Prison Break)
   // Game 4: Biryani (The Lost Recipe)
+  // Pure complimentary sessions (finalTotal === 0 / 100% off) are excluded from paid session counts and counted separately!
   const gameStats = useMemo(() => {
     const stats = {
-      bank: { name: "Bank", games: 0, players: 0, sale: 0 },
-      mummy: { name: "Mummy", games: 0, players: 0, sale: 0 },
-      prison: { name: "Prison", games: 0, players: 0, sale: 0 },
-      biryani: { name: "Biryani", games: 0, players: 0, sale: 0 }
+      bank: { name: "Bank", games: 0, players: 0, sale: 0, complimentaryGames: 0, complimentaryPlayers: 0 },
+      mummy: { name: "Mummy", games: 0, players: 0, sale: 0, complimentaryGames: 0, complimentaryPlayers: 0 },
+      prison: { name: "Prison", games: 0, players: 0, sale: 0, complimentaryGames: 0, complimentaryPlayers: 0 },
+      biryani: { name: "Biryani", games: 0, players: 0, sale: 0, complimentaryGames: 0, complimentaryPlayers: 0 }
     };
 
     dayBookings.forEach(b => {
@@ -350,9 +358,15 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       else if (gName.includes('recipe') || gName.includes('biryani')) key = 'biryani';
 
       if (key && stats[key]) {
-        stats[key].games += 1;
-        stats[key].players += Number(b.players) || 0;
-        stats[key].sale += getPaidTotal(b.payments);
+        const isComp = isComplimentaryBooking(b) || b.offerId === 'complimentary' || Number(b.finalTotal) === 0;
+        if (isComp) {
+          stats[key].complimentaryGames += 1;
+          stats[key].complimentaryPlayers += Number(b.players) || 0;
+        } else {
+          stats[key].games += 1;
+          stats[key].players += Number(b.players) || 0;
+          stats[key].sale += getPaidTotal(b.payments);
+        }
       }
     });
 
@@ -571,6 +585,9 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     lines.push(``);
     lines.push(`No.of games:*${pad2(gameStats.bank.games)}*`);
     lines.push(`Total players:*${pad2(gameStats.bank.players)}*`);
+    if (gameStats.bank.complimentaryGames > 0) {
+      lines.push(`Complementary game: *${pad2(gameStats.bank.complimentaryGames)}*`);
+    }
     lines.push(`*Sale : ${gameStats.bank.sale > 0 ? gameStats.bank.sale : '00'}*`);
     lines.push(``);
 
@@ -579,6 +596,9 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     lines.push(``);
     lines.push(`No. of games: *${pad2(gameStats.mummy.games)}*`);
     lines.push(`Total players:*${pad2(gameStats.mummy.players)}*`);
+    if (gameStats.mummy.complimentaryGames > 0) {
+      lines.push(`Complementary game: *${pad2(gameStats.mummy.complimentaryGames)}*`);
+    }
     lines.push(`*Sale :${gameStats.mummy.sale > 0 ? gameStats.mummy.sale : '00'}*`);
     lines.push(`Who went in as Mummy:`);
     if (mummyActors.length > 0) {
@@ -594,6 +614,9 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     lines.push(``);
     lines.push(`No.of games: *${pad2(gameStats.prison.games)}*`);
     lines.push(`Total players: *${pad2(gameStats.prison.players)}*`);
+    if (gameStats.prison.complimentaryGames > 0) {
+      lines.push(`Complementary game: *${pad2(gameStats.prison.complimentaryGames)}*`);
+    }
     lines.push(`*Sale : ${gameStats.prison.sale > 0 ? gameStats.prison.sale : '00'}*`);
     lines.push(``);
 
@@ -602,6 +625,9 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     lines.push(``);
     lines.push(`No.of games :*${pad2(gameStats.biryani.games)}*`);
     lines.push(`Total players :*${pad2(gameStats.biryani.players)}*`);
+    if (gameStats.biryani.complimentaryGames > 0) {
+      lines.push(`Complementary game: *${pad2(gameStats.biryani.complimentaryGames)}*`);
+    }
     lines.push(`*Sale : ${gameStats.biryani.sale > 0 ? gameStats.biryani.sale : '00'}*`);
     lines.push(``);
 
@@ -765,10 +791,16 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">No. of Games</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.bank.games)}*</span>
+                    {gameStats.bank.complimentaryGames > 0 && (
+                      <span className="block text-[10px] font-black text-emerald-700">+{pad2(gameStats.bank.complimentaryGames)} Comp</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">Total Players</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.bank.players)}*</span>
+                    {gameStats.bank.complimentaryPlayers > 0 && (
+                      <span className="block text-[10px] font-bold text-emerald-700">+{pad2(gameStats.bank.complimentaryPlayers)} kid</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">Sale (₹)</span>
@@ -784,10 +816,16 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">No. of Games</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.mummy.games)}*</span>
+                    {gameStats.mummy.complimentaryGames > 0 && (
+                      <span className="block text-[10px] font-black text-emerald-700">+{pad2(gameStats.mummy.complimentaryGames)} Comp</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">Total Players</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.mummy.players)}*</span>
+                    {gameStats.mummy.complimentaryPlayers > 0 && (
+                      <span className="block text-[10px] font-bold text-emerald-700">+{pad2(gameStats.mummy.complimentaryPlayers)} kid</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">Sale (₹)</span>
@@ -803,10 +841,16 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">No. of Games</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.prison.games)}*</span>
+                    {gameStats.prison.complimentaryGames > 0 && (
+                      <span className="block text-[10px] font-black text-emerald-700">+{pad2(gameStats.prison.complimentaryGames)} Comp</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">Total Players</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.prison.players)}*</span>
+                    {gameStats.prison.complimentaryPlayers > 0 && (
+                      <span className="block text-[10px] font-bold text-emerald-700">+{pad2(gameStats.prison.complimentaryPlayers)} kid</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">Sale (₹)</span>
@@ -822,10 +866,16 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">No. of Games</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.biryani.games)}*</span>
+                    {gameStats.biryani.complimentaryGames > 0 && (
+                      <span className="block text-[10px] font-black text-emerald-700">+{pad2(gameStats.biryani.complimentaryGames)} Comp</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">Total Players</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.biryani.players)}*</span>
+                    {gameStats.biryani.complimentaryPlayers > 0 && (
+                      <span className="block text-[10px] font-bold text-emerald-700">+{pad2(gameStats.biryani.complimentaryPlayers)} kid</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">Sale (₹)</span>
