@@ -27,7 +27,7 @@ import {
   isComplimentaryBooking,
   BRANCH_INFO
 } from '../config/venueData';
-import { formatCurrency, getPaidTotal } from '../utils/pricingEngine';
+import { formatCurrency, getPaidTotal, calculatePricing } from '../utils/pricingEngine';
 
 export default function SalesDashboard({
   bookings,
@@ -56,17 +56,49 @@ export default function SalesDashboard({
     return getPlayerCategory(booking.players);
   };
 
-  // Immediate category change with Realtime Database (RTDB) & LocalStorage synchronization
+  // When category changes from 4-6 to 7+ (or vice versa), pop up the complete booking modal
+  // with customer details, new tier & recalculated amounts so cash/card totals can be balanced!
   const handleCategoryChange = (booking, newCategory) => {
     if (!booking) return;
+    const currentCategory = getDisplayCategory(booking);
+    if (currentCategory === newCategory) return;
+
+    let targetPlayers = Number(booking.players) || 1;
+    if (newCategory.includes('7') && targetPlayers < 7) {
+      targetPlayers = 7;
+    } else if ((newCategory.includes('4') || newCategory.includes('6')) && (targetPlayers < 4 || targetPlayers > 6)) {
+      targetPlayers = 4;
+    } else if (newCategory.includes('2') || newCategory.includes('3')) {
+      if (targetPlayers > 3) {
+        targetPlayers = 2;
+      }
+    }
+
+    const newPricing = calculatePricing({
+      date: booking.date,
+      players: targetPlayers,
+      offerId: booking.offerId || 'none',
+      customDiscountPercent: booking.discountPercent,
+      isWeekendOverride: booking.rateType === 'weekend'
+    });
+
     const updated = {
       ...booking,
+      players: targetPlayers,
       playerCategory: newCategory,
       categoryOverride: newCategory,
       customCategory: newCategory,
+      ratePerPlayer: newPricing.ratePerPlayer,
+      baseTotal: newPricing.baseTotal,
+      discountAmount: newPricing.discountAmount,
+      finalTotal: newPricing.finalTotal,
       updatedAt: new Date().toISOString()
     };
-    if (onUpdateBooking) {
+
+    // Pop up the complete customer details modal so amounts and cash/card payments can be confirmed & saved
+    if (onOpenBookingModal) {
+      onOpenBookingModal(updated);
+    } else if (onUpdateBooking) {
       onUpdateBooking(updated);
     }
   };
@@ -692,6 +724,16 @@ export default function SalesDashboard({
                               <AlertCircle className="w-3 h-3" />
                               <span>Advance / Pending</span>
                             </span>
+                          ) : !isComplimentary && Number(booking.finalTotal) > paid ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenBookingModal(booking)}
+                              className="inline-flex items-center space-x-1 text-[11px] font-black text-red-800 bg-red-100 hover:bg-red-200 border border-red-300 px-2 py-0.5 rounded mt-1 transition cursor-pointer"
+                              title="Amount mismatch detected: Click to open customer details and balance payment"
+                            >
+                              <AlertCircle className="w-3 h-3 text-red-600 shrink-0" />
+                              <span>⚠️ Unpaid Due: {formatCurrency(booking.finalTotal - paid)}</span>
+                            </button>
                           ) : (
                             <span className="inline-flex items-center space-x-1 text-xs font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded mt-1">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />

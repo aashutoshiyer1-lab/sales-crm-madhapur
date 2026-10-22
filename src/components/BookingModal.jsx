@@ -525,7 +525,8 @@ export default function BookingModal({
   const hasValidPhone = cleanPhone.length === 10;
   const hasValidGame = Boolean(gameName && gameName.trim().length > 0);
   const hasValidPlayers = Boolean(players !== '' && Number(players) > 0);
-  const hasValidPayment = Boolean(isComplimentary || paidTotal > 0 || isPending);
+  const isPaymentBalanced = isComplimentary || paidTotal >= pricing.finalTotal || isPending;
+  const hasValidPayment = Boolean(isComplimentary || isPaymentBalanced);
 
   const isFormValid = hasValidName && hasValidPhone && hasValidGame && hasValidPlayers && hasValidPayment;
 
@@ -551,7 +552,7 @@ export default function BookingModal({
         return;
       }
       if (!hasValidPayment) {
-        alert("No payment was recorded. Please enter payment amounts or check 'Mark as Advance / Pending Payment' before confirming.");
+        alert(`Payment mismatch: Total amount due is ₹${pricing.finalTotal}, but only ₹${paidTotal} was recorded. Please add the remaining ₹${remainingBalance} into Cash/Card or check 'Mark as Advance / Pending Payment' before confirming.`);
         return;
       }
       return;
@@ -992,10 +993,9 @@ export default function BookingModal({
                 {/* Tier 1: 2-3 Players */}
                 <div
                   onClick={() => {
-                    if (isComplimentary) {
-                      setCategoryOverride('2–3 Players');
-                    } else {
-                      setPlayers(2);
+                    setCategoryOverride('2–3 Players');
+                    if (!isComplimentary) {
+                      if (Number(players) > 3 || Number(players) < 2) setPlayers(2);
                     }
                   }}
                   className={`p-3 rounded-2xl border-2 transition-all cursor-pointer ${
@@ -1023,10 +1023,9 @@ export default function BookingModal({
                 {/* Tier 2: 4-6 Players */}
                 <div
                   onClick={() => {
-                    if (isComplimentary) {
-                      setCategoryOverride('4–6 Players');
-                    } else {
-                      setPlayers(4);
+                    setCategoryOverride('4–6 Players');
+                    if (!isComplimentary) {
+                      if (Number(players) < 4 || Number(players) > 6) setPlayers(4);
                     }
                   }}
                   className={`p-3 rounded-2xl border-2 transition-all cursor-pointer ${
@@ -1054,10 +1053,9 @@ export default function BookingModal({
                 {/* Tier 3: 7+ Players */}
                 <div
                   onClick={() => {
-                    if (isComplimentary) {
-                      setCategoryOverride('7+ Players');
-                    } else {
-                      setPlayers(7);
+                    setCategoryOverride('7+ Players');
+                    if (!isComplimentary) {
+                      if (Number(players) < 7) setPlayers(7);
                     }
                   }}
                   className={`p-3 rounded-2xl border-2 transition-all cursor-pointer ${
