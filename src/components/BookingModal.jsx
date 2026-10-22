@@ -708,7 +708,7 @@ export default function BookingModal({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Customer Name */}
               <div>
                 <label className="block text-xs font-black text-blue-950 mb-1">
@@ -754,22 +754,6 @@ export default function BookingModal({
                       setCustomerPhone(digitsOnly);
                     }}
                     className="bg-white font-black font-mono text-slate-950 outline-none w-full text-sm placeholder:text-slate-400"
-                  />
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="block text-xs font-black text-blue-950 mb-1">
-                  Booking Notes / Tags
-                </label>
-                <div className="flex items-center space-x-2 bg-white border-2 border-blue-300 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 rounded-xl px-3 py-2.5 transition">
-                  <input
-                    type="text"
-                    placeholder="e.g. Birthday, corporate group"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="bg-white font-bold text-slate-950 outline-none w-full text-sm placeholder:text-slate-400"
                   />
                 </div>
               </div>
