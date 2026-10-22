@@ -503,9 +503,9 @@ export default function BookingModal({
     setPayments(empty);
   };
 
-  // Plus / Minus adjustments
+  // Plus / Minus adjustments (starts from 0 if empty, so clicking + adds 1 player instead of jumping to 3)
   const handlePlayerAdjust = (delta) => {
-    const current = Number(players) || 2;
+    const current = (players === '' || !players) ? 0 : Number(players);
     const next = Math.max(1, current + delta);
     setPlayers(next);
   };
@@ -519,36 +519,49 @@ export default function BookingModal({
     setDate(getTodayDateString());
   };
 
+  // Form Validation: Customer details, Game selection, Group size, and Advance/Payment required before confirming
+  const cleanPhone = customerPhone.replace(/\D/g, '').trim();
+  const hasValidName = Boolean(customerName && customerName.trim().length > 0);
+  const hasValidPhone = cleanPhone.length === 10;
+  const hasValidGame = Boolean(gameName && gameName.trim().length > 0);
+  const hasValidPlayers = Boolean(players !== '' && Number(players) > 0);
+  const hasValidPayment = Boolean(isComplimentary || paidTotal > 0 || isPending);
+
+  const isFormValid = hasValidName && hasValidPhone && hasValidGame && hasValidPlayers && hasValidPayment;
+
   // Submit Handler
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (!customerName.trim()) {
-      alert("Please enter customer name.");
-      return;
-    }
-
-    const cleanPhone = customerPhone.replace(/\D/g, '').trim();
-    if (!cleanPhone || cleanPhone.length !== 10) {
-      alert("Please enter a valid 10-digit mobile number (phone numbers must be strictly 10 digits).");
-      return;
-    }
-
-    if (!players || Number(players) <= 0) {
-      alert("Please enter the number of players (minimum 1 player required).");
-      return;
-    }
-
-    if (!gameName || gameName.trim() === '') {
-      alert("Please select an escape room game before confirming.");
+    if (!isFormValid) {
+      if (!hasValidName) {
+        alert("Please enter customer name before confirming.");
+        return;
+      }
+      if (!hasValidPhone) {
+        alert("Please enter a valid 10-digit mobile number before confirming.");
+        return;
+      }
+      if (!hasValidGame) {
+        alert("Please select an escape room game before confirming.");
+        return;
+      }
+      if (!hasValidPlayers) {
+        alert("Please enter group size / player count before confirming.");
+        return;
+      }
+      if (!hasValidPayment) {
+        alert("No payment was recorded. Please enter payment amounts or check 'Mark as Advance / Pending Payment' before confirming.");
+        return;
+      }
       return;
     }
 
     const selectedOfferObj = OFFERS.find(o => o.id === offerId);
-    const isComplimentary = Boolean(selectedOfferObj?.isComplimentary || offerId === 'complimentary');
+    const isComp = Boolean(selectedOfferObj?.isComplimentary || offerId === 'complimentary');
 
     // Prompt/confirm pax bracket category for complimentary game (Kids Under 5 Years) via interactive Modal
-    if (isComplimentary) {
+    if (isComp) {
       setShowComplimentaryCategoryConfirm(true);
       return;
     }
@@ -1453,20 +1466,43 @@ export default function BookingModal({
           </div>
 
           {/* Modal Footer Controls */}
-          <div className="flex items-center justify-end space-x-3 pt-4 border-t-2 border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-slate-700 hover:bg-slate-100 transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-2.5 rounded-xl font-black text-xs sm:text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/25 active:scale-95 transition"
-            >
-              {bookingToEdit ? 'Save Changes' : 'Confirm & Save Booking'}
-            </button>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t-2 border-slate-100">
+            <div className="flex items-center space-x-2 text-xs">
+              {!isFormValid && (
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-slate-500">
+                  <span className="text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300 font-black">
+                    Required to confirm:
+                  </span>
+                  {!hasValidName && <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-300">Name</span>}
+                  {!hasValidPhone && <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-300">10-Digit Mobile</span>}
+                  {!hasValidGame && <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-300">Select Game</span>}
+                  {!hasValidPlayers && <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-300">Group Size</span>}
+                  {!hasValidPayment && <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-300">Payment / Mark Advance</span>}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-3 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!isFormValid}
+                className={`px-6 py-2.5 rounded-xl font-black text-xs sm:text-sm transition flex items-center space-x-2 ${
+                  isFormValid
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/25 active:scale-95 cursor-pointer'
+                    : 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed shadow-none'
+                }`}
+                title={!isFormValid ? "Please fill customer name, 10-digit phone, select game, enter group size, and record payment or mark advance." : "Confirm and Save Booking"}
+              >
+                <span>{bookingToEdit ? 'Save Changes' : 'Confirm & Save Booking'}</span>
+              </button>
+            </div>
           </div>
 
         </form>
