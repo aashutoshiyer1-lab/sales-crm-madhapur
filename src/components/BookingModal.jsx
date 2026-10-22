@@ -1180,29 +1180,27 @@ export default function BookingModal({
               </div>
             </div>
 
-            {/* Custom Reason / Note for Any Offer or Discount */}
-            {offerId !== 'none' && (
-              <div className="p-3.5 bg-amber-50 rounded-2xl border-2 border-amber-300 space-y-1.5 animate-fadeIn">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-black text-amber-950 flex items-center space-x-1.5">
-                    <Tag className="w-4 h-4 text-amber-700" />
-                    <span>Custom Note / Reason for Discount ({OFFERS.find(o => o.id === offerId)?.name || 'Offer'}):</span>
-                  </label>
-                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
-                    Optional • Carries to Sales & Closing Report
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2 bg-white border-2 border-amber-300 focus-within:border-amber-600 rounded-xl px-3 py-2 transition shadow-xs">
-                  <input
-                    type="text"
-                    placeholder="e.g. Website Booking ID, Birthday ID verified, Corporate group, Cross-promo voucher..."
-                    value={customDiscountReason}
-                    onChange={(e) => setCustomDiscountReason(e.target.value)}
-                    className="bg-white font-bold text-slate-950 text-xs sm:text-sm outline-none w-full placeholder:text-slate-400"
-                  />
-                </div>
+            {/* Custom Reason Field (Default for all offers including 'No Discount') */}
+            <div className="p-3.5 bg-amber-50 rounded-2xl border-2 border-amber-300 space-y-1.5 animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-black text-amber-950 flex items-center space-x-1.5">
+                  <Tag className="w-4 h-4 text-amber-700" />
+                  <span>Custom Reason:</span>
+                </label>
+                <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                  Optional • Directly populates to Sales Report & Closing Message
+                </span>
               </div>
-            )}
+              <div className="flex items-center space-x-2 bg-white border-2 border-amber-300 focus-within:border-amber-600 rounded-xl px-3 py-2 transition shadow-xs">
+                <input
+                  type="text"
+                  placeholder="Type custom reason or note here (e.g. Website Booking ID, Birthday ID, Corporate, Cross-promo...)"
+                  value={customDiscountReason}
+                  onChange={(e) => setCustomDiscountReason(e.target.value)}
+                  className="bg-white font-bold text-slate-950 text-xs sm:text-sm outline-none w-full placeholder:text-slate-400"
+                />
+              </div>
+            </div>
 
             {/* Complimentary Game Category Bracket Selection (Supports any category even for 2 or 3 kids) */}
             {(offerId === 'complimentary' || selectedOfferObj?.isComplimentary) && (

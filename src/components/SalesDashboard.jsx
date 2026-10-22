@@ -238,7 +238,7 @@ export default function SalesDashboard({
         lines.push(`   Discount: ${b.offerName} (-₹${b.discountAmount || 0})`);
       }
       if (b.customDiscountReason || b.customNote) {
-        lines.push(`   Offer Note: ${b.customDiscountReason || b.customNote}`);
+        lines.push(`   Custom Reason: ${b.customDiscountReason || b.customNote}`);
       }
       if (b.reference) {
         lines.push(`   Ref: ${b.reference}`);
@@ -713,8 +713,8 @@ export default function SalesDashboard({
                           )}
 
                           {(booking.customDiscountReason || booking.customNote) && (
-                            <span className="px-2 py-0.5 rounded text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-300 italic">
-                              📝 Reason: {booking.customDiscountReason || booking.customNote}
+                            <span className="px-2 py-0.5 rounded text-[11px] font-bold text-amber-950 bg-amber-100 border border-amber-300">
+                              💬 Custom Reason: {booking.customDiscountReason || booking.customNote}
                             </span>
                           )}
 

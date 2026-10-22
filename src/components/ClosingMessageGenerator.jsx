@@ -588,13 +588,15 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       const lines = [];
       lines.push(`*${roomName.toUpperCase()}*`);
       roomBookings.forEach((b, index) => {
-        lines.push(`${index + 1}. ${generateBookingNoteSentence(b)}`);
         const isComp = b.offerId === 'complimentary' || b.isComplimentary || (OFFERS.find(o => o.id === b.offerId)?.isComplimentary);
-        const rawNote = (b.customDiscountReason || b.customNote || b.notes || '').trim();
-        const formattedGrammarNote = formatCustomNoteGrammar(rawNote);
-        if (formattedGrammarNote && (!isComp || !/under 5|complimentary/i.test(formattedGrammarNote))) {
-          lines.push(formattedGrammarNote);
+        const userReason = (b.customDiscountReason || b.customNote || '').trim();
+
+        if (userReason) {
+          lines.push(`${index + 1}. ${userReason}`);
+        } else {
+          lines.push(`${index + 1}. ${generateBookingNoteSentence(b)}`);
         }
+
         if (!isComp) {
           lines.push(`Customer Name: ${b.customerName || 'N/A'}`);
           lines.push(`Mobile Number: ${b.customerPhone || 'N/A'}`);
@@ -696,14 +698,13 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       sectionLines.push(`*${roomName.toUpperCase()}*`);
       roomBookings.forEach((b, index) => {
         const itemLines = [];
-        const mainSentence = generateBookingNoteSentence(b);
-        itemLines.push(`${index + 1}. ${mainSentence}`);
-
-        const rawNote = (b.customDiscountReason || b.customNote || b.notes || '').trim();
-        const formattedGrammarNote = formatCustomNoteGrammar(rawNote);
         const isComp = b.offerId === 'complimentary' || b.isComplimentary || (OFFERS.find(o => o.id === b.offerId)?.isComplimentary);
-        if (formattedGrammarNote && (!isComp || !/under 5|complimentary/i.test(formattedGrammarNote))) {
-          itemLines.push(formattedGrammarNote);
+        const userReason = (b.customDiscountReason || b.customNote || '').trim();
+
+        if (userReason) {
+          itemLines.push(`${index + 1}. ${userReason}`);
+        } else {
+          itemLines.push(`${index + 1}. ${generateBookingNoteSentence(b)}`);
         }
 
         if (!isComp) {
