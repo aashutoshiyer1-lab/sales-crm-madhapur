@@ -589,13 +589,16 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       lines.push(`*${roomName.toUpperCase()}*`);
       roomBookings.forEach((b, index) => {
         lines.push(`${index + 1}. ${generateBookingNoteSentence(b)}`);
+        const isComp = b.offerId === 'complimentary' || b.isComplimentary || (OFFERS.find(o => o.id === b.offerId)?.isComplimentary);
         const rawNote = (b.customDiscountReason || b.customNote || b.notes || '').trim();
         const formattedGrammarNote = formatCustomNoteGrammar(rawNote);
-        if (formattedGrammarNote) {
+        if (formattedGrammarNote && (!isComp || !/under 5|complimentary/i.test(formattedGrammarNote))) {
           lines.push(formattedGrammarNote);
         }
-        lines.push(`Customer Name: ${b.customerName || 'N/A'}`);
-        lines.push(`Mobile Number: ${b.customerPhone || 'N/A'}`);
+        if (!isComp) {
+          lines.push(`Customer Name: ${b.customerName || 'N/A'}`);
+          lines.push(`Mobile Number: ${b.customerPhone || 'N/A'}`);
+        }
         lines.push(``);
       });
       sections.push(lines.join('\n').trim());
@@ -698,12 +701,15 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
 
         const rawNote = (b.customDiscountReason || b.customNote || b.notes || '').trim();
         const formattedGrammarNote = formatCustomNoteGrammar(rawNote);
-        if (formattedGrammarNote) {
+        const isComp = b.offerId === 'complimentary' || b.isComplimentary || (OFFERS.find(o => o.id === b.offerId)?.isComplimentary);
+        if (formattedGrammarNote && (!isComp || !/under 5|complimentary/i.test(formattedGrammarNote))) {
           itemLines.push(formattedGrammarNote);
         }
 
-        itemLines.push(`Customer Name: ${b.customerName || 'N/A'}`);
-        itemLines.push(`Mobile Number: ${b.customerPhone || 'N/A'}`);
+        if (!isComp) {
+          itemLines.push(`Customer Name: ${b.customerName || 'N/A'}`);
+          itemLines.push(`Mobile Number: ${b.customerPhone || 'N/A'}`);
+        }
 
         sectionLines.push(itemLines.join('\n'));
       });
