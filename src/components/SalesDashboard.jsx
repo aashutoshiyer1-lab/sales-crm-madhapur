@@ -592,6 +592,7 @@ export default function SalesDashboard({
               <tbody className="divide-y divide-blue-100">
                 {searchedAndFiltered.map((booking) => {
                   const paid = getPaidTotal(booking.payments);
+                  const isComplimentary = isComplimentaryBooking(booking);
                   const isPending = booking.isPending || booking.paymentStatus === 'pending';
                   const requiresScreenshot = Object.keys(booking.payments || {}).some(
                     mode => MODES_REQUIRING_SCREENSHOT.includes(mode) && Number(booking.payments[mode]) > 0
