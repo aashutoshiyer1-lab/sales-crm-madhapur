@@ -269,7 +269,7 @@ export default function BookingModal({
         setCustomRefName('');
       }
 
-      // Auto-set payment mode when prepaid online channels are selected
+      // Auto-set payment mode and note when prepaid online channels are selected
       if (newOfferId === 'website_booking') {
         const newPayments = {};
         PAYMENT_MODES.forEach(m => {
@@ -277,6 +277,7 @@ export default function BookingModal({
         });
         setPayments(newPayments);
         setIsPending(false);
+        setCustomDiscountReason(prev => prev && prev !== 'District App' && prev !== 'Activity Kids' ? prev : 'Website Booking');
       } else if (newOfferId === 'district_app') {
         const newPayments = {};
         PAYMENT_MODES.forEach(m => {
@@ -284,6 +285,7 @@ export default function BookingModal({
         });
         setPayments(newPayments);
         setIsPending(false);
+        setCustomDiscountReason(prev => prev && prev !== 'Website Booking' && prev !== 'Activity Kids' ? prev : 'District App');
       } else if (newOfferId === 'activity_kids') {
         const newPayments = {};
         PAYMENT_MODES.forEach(m => {
@@ -291,6 +293,7 @@ export default function BookingModal({
         });
         setPayments(newPayments);
         setIsPending(false);
+        setCustomDiscountReason(prev => prev && prev !== 'Website Booking' && prev !== 'District App' ? prev : 'Activity Kids');
       }
     }
   };
@@ -410,24 +413,30 @@ export default function BookingModal({
       [mode]: numVal
     }));
 
-    if (numVal > 0) {
-      if (mode === 'Razorpay (Website Bookings)' && offerId !== 'website_booking') {
+    if (numVal > 0 || val !== '') {
+      if (mode === 'Razorpay (Website Bookings)') {
         setOfferId('website_booking');
         setDiscountPercent(0);
         setRefType('none');
-      } else if (mode === 'Prepaid by District' && offerId !== 'district_app') {
+        setCustomRefName('');
+        setCustomDiscountReason(prev => (prev && prev !== 'District App' && prev !== 'Activity Kids') ? prev : 'Website Booking');
+      } else if (mode === 'Prepaid by District') {
         setOfferId('district_app');
         setDiscountPercent(0);
         setRefType('none');
-      } else if (mode === 'Activity Kids' && offerId !== 'activity_kids') {
+        setCustomRefName('');
+        setCustomDiscountReason(prev => (prev && prev !== 'Website Booking' && prev !== 'Activity Kids') ? prev : 'District App');
+      } else if (mode === 'Activity Kids') {
         setOfferId('activity_kids');
         setDiscountPercent(0);
         setRefType('none');
+        setCustomRefName('');
+        setCustomDiscountReason(prev => (prev && prev !== 'Website Booking' && prev !== 'District App') ? prev : 'Activity Kids');
       }
     }
   };
 
-  // Quick 100% Auto Fill (automatically selects offer for Razorpay, District, or Activity Kids)
+  // Quick 100% Auto Fill (automatically selects offer and populates discount note for Razorpay, District, or Activity Kids)
   const handleAutoFillMode = (mode) => {
     const newPayments = {};
     PAYMENT_MODES.forEach(m => {
@@ -440,14 +449,20 @@ export default function BookingModal({
       setOfferId('website_booking');
       setDiscountPercent(0);
       setRefType('none');
+      setCustomRefName('');
+      setCustomDiscountReason(prev => (prev && prev !== 'District App' && prev !== 'Activity Kids') ? prev : 'Website Booking');
     } else if (mode === 'Prepaid by District') {
       setOfferId('district_app');
       setDiscountPercent(0);
       setRefType('none');
+      setCustomRefName('');
+      setCustomDiscountReason(prev => (prev && prev !== 'Website Booking' && prev !== 'Activity Kids') ? prev : 'District App');
     } else if (mode === 'Activity Kids') {
       setOfferId('activity_kids');
       setDiscountPercent(0);
       setRefType('none');
+      setCustomRefName('');
+      setCustomDiscountReason(prev => (prev && prev !== 'Website Booking' && prev !== 'District App') ? prev : 'Activity Kids');
     }
   };
 
@@ -459,6 +474,26 @@ export default function BookingModal({
       ...prev,
       [mode]: current + remainingBalance
     }));
+
+    if (mode === 'Razorpay (Website Bookings)') {
+      setOfferId('website_booking');
+      setDiscountPercent(0);
+      setRefType('none');
+      setCustomRefName('');
+      setCustomDiscountReason(prev => (prev && prev !== 'District App' && prev !== 'Activity Kids') ? prev : 'Website Booking');
+    } else if (mode === 'Prepaid by District') {
+      setOfferId('district_app');
+      setDiscountPercent(0);
+      setRefType('none');
+      setCustomRefName('');
+      setCustomDiscountReason(prev => (prev && prev !== 'Website Booking' && prev !== 'Activity Kids') ? prev : 'District App');
+    } else if (mode === 'Activity Kids') {
+      setOfferId('activity_kids');
+      setDiscountPercent(0);
+      setRefType('none');
+      setCustomRefName('');
+      setCustomDiscountReason(prev => (prev && prev !== 'Website Booking' && prev !== 'District App') ? prev : 'Activity Kids');
+    }
   };
 
   // Clear payments
@@ -740,7 +775,7 @@ export default function BookingModal({
                   ? 'bg-amber-100 text-amber-900 border-amber-300'
                   : 'bg-blue-100 text-blue-900 border-blue-300'
               }`}>
-                {weekendStatus ? 'Weekend (10:30 AM – 11:00 PM)' : 'Weekday (11:00 AM – 10:00 PM)'}
+                Operating Hours: {weekendStatus ? 'Weekend (10:30 AM – 11:00 PM)' : 'Weekday (11:00 AM – 10:00 PM)'}
               </span>
             </div>
 
@@ -860,24 +895,19 @@ export default function BookingModal({
             </div>
 
             {/* Interactive Weekday / Weekend Rate Toggle */}
-            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-blue-50/90 rounded-2xl border-2 border-blue-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 bg-blue-50/90 rounded-2xl border-2 border-blue-200">
               <div className="flex items-center space-x-2">
-                <span className="text-xs font-black text-blue-950">Pricing Rate Mode:</span>
-                <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+                <span className="text-xs font-black text-blue-950">Applied Pricing Tier:</span>
+                <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full border transition-all ${
                   isWeekendRate
                     ? 'bg-amber-100 text-amber-900 border-amber-300'
                     : 'bg-blue-100 text-blue-900 border-blue-300'
                 }`}>
-                  {isWeekendRate ? '🌴 Weekend Rates Applied' : '🏢 Weekday Rates Applied'}
+                  {isWeekendRate ? '🌴 Weekend Price Tier' : '🏢 Weekday Price Tier'}
                 </span>
-                {isRateManuallyToggled && (
-                  <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
-                    Manual Override
-                  </span>
-                )}
               </div>
 
-              <div className="flex items-center space-x-1.5 bg-white p-1 rounded-xl border border-blue-300 shadow-2xs">
+              <div className="inline-flex items-center space-x-1.5 bg-white p-1 rounded-xl border border-blue-300 shadow-2xs">
                 <button
                   type="button"
                   onClick={() => {
@@ -1314,7 +1344,12 @@ export default function BookingModal({
                 return (
                   <div
                     key={mode}
-                    className={`p-3 rounded-2xl border-2 transition-all ${
+                    onClick={(e) => {
+                      if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') {
+                        handleAutoFillMode(mode);
+                      }
+                    }}
+                    className={`p-3 rounded-2xl border-2 transition-all cursor-pointer ${
                       Number(currentVal) > 0
                         ? 'bg-blue-50/70 border-blue-600 ring-2 ring-blue-500/20 shadow-xs'
                         : 'bg-white border-blue-200 hover:border-blue-400'
