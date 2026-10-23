@@ -269,7 +269,7 @@ export default function BookingModal({
         setCustomRefName('');
       }
 
-      // Auto-set payment mode and note when prepaid online channels are selected
+      // Auto-set payment mode when prepaid online channels are selected
       if (newOfferId === 'website_booking') {
         const newPayments = {};
         PAYMENT_MODES.forEach(m => {
@@ -277,7 +277,6 @@ export default function BookingModal({
         });
         setPayments(newPayments);
         setIsPending(false);
-        setCustomDiscountReason(prev => prev && prev !== 'District App' && prev !== 'Activity Kids' ? prev : 'Website Booking');
       } else if (newOfferId === 'district_app') {
         const newPayments = {};
         PAYMENT_MODES.forEach(m => {
@@ -285,7 +284,6 @@ export default function BookingModal({
         });
         setPayments(newPayments);
         setIsPending(false);
-        setCustomDiscountReason(prev => prev && prev !== 'Website Booking' && prev !== 'Activity Kids' ? prev : 'District App');
       } else if (newOfferId === 'activity_kids') {
         const newPayments = {};
         PAYMENT_MODES.forEach(m => {
@@ -293,7 +291,6 @@ export default function BookingModal({
         });
         setPayments(newPayments);
         setIsPending(false);
-        setCustomDiscountReason(prev => prev && prev !== 'Website Booking' && prev !== 'District App' ? prev : 'Activity Kids');
       }
     }
   };
@@ -419,24 +416,21 @@ export default function BookingModal({
         setDiscountPercent(0);
         setRefType('none');
         setCustomRefName('');
-        setCustomDiscountReason(prev => (prev && prev !== 'District App' && prev !== 'Activity Kids') ? prev : 'Website Booking');
       } else if (mode === 'Prepaid by District') {
         setOfferId('district_app');
         setDiscountPercent(0);
         setRefType('none');
         setCustomRefName('');
-        setCustomDiscountReason(prev => (prev && prev !== 'Website Booking' && prev !== 'Activity Kids') ? prev : 'District App');
       } else if (mode === 'Activity Kids') {
         setOfferId('activity_kids');
         setDiscountPercent(0);
         setRefType('none');
         setCustomRefName('');
-        setCustomDiscountReason(prev => (prev && prev !== 'Website Booking' && prev !== 'District App') ? prev : 'Activity Kids');
       }
     }
   };
 
-  // Quick 100% Auto Fill (automatically selects offer and populates discount note for Razorpay, District, or Activity Kids)
+  // Quick 100% Auto Fill (automatically selects offer for Razorpay, District, or Activity Kids)
   const handleAutoFillMode = (mode) => {
     const newPayments = {};
     PAYMENT_MODES.forEach(m => {
@@ -450,19 +444,16 @@ export default function BookingModal({
       setDiscountPercent(0);
       setRefType('none');
       setCustomRefName('');
-      setCustomDiscountReason(prev => (prev && prev !== 'District App' && prev !== 'Activity Kids') ? prev : 'Website Booking');
     } else if (mode === 'Prepaid by District') {
       setOfferId('district_app');
       setDiscountPercent(0);
       setRefType('none');
       setCustomRefName('');
-      setCustomDiscountReason(prev => (prev && prev !== 'Website Booking' && prev !== 'Activity Kids') ? prev : 'District App');
     } else if (mode === 'Activity Kids') {
       setOfferId('activity_kids');
       setDiscountPercent(0);
       setRefType('none');
       setCustomRefName('');
-      setCustomDiscountReason(prev => (prev && prev !== 'Website Booking' && prev !== 'District App') ? prev : 'Activity Kids');
     }
   };
 
@@ -480,19 +471,16 @@ export default function BookingModal({
       setDiscountPercent(0);
       setRefType('none');
       setCustomRefName('');
-      setCustomDiscountReason(prev => (prev && prev !== 'District App' && prev !== 'Activity Kids') ? prev : 'Website Booking');
     } else if (mode === 'Prepaid by District') {
       setOfferId('district_app');
       setDiscountPercent(0);
       setRefType('none');
       setCustomRefName('');
-      setCustomDiscountReason(prev => (prev && prev !== 'Website Booking' && prev !== 'Activity Kids') ? prev : 'District App');
     } else if (mode === 'Activity Kids') {
       setOfferId('activity_kids');
       setDiscountPercent(0);
       setRefType('none');
       setCustomRefName('');
-      setCustomDiscountReason(prev => (prev && prev !== 'Website Booking' && prev !== 'District App') ? prev : 'Activity Kids');
     }
   };
 
