@@ -656,8 +656,9 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       const isComp = b.offerId === 'complimentary' || b.isComplimentary || (OFFERS.find(o => o.id === b.offerId)?.isComplimentary);
       const shortGame = getShortGameName(b.gameName);
       const paxStr = pad2(b.players || 1);
-      const customReason = (b.customDiscountReason || '').trim();
-      const hasOfferOrDiscount = (b.offerId && b.offerId !== 'none') || (Number(b.discountPercent) > 0) || isComp;
+      const rawCustom = (b.customDiscountReason || b.customNote || '').trim();
+      const isGenericOrDuplicate = /^(?:none|no discount|n\/?a|nil|district\s*app|website\s*booking|activity\s*kids)$/i.test(rawCustom);
+      const customNoteToDisplay = !isGenericOrDuplicate ? rawCustom : '';
       const discountSentence = generateBookingNoteSentence(b);
 
       const blockLines = [];
@@ -670,8 +671,8 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       blockLines.push(``);
       blockLines.push(discountSentence);
 
-      if (customReason && hasOfferOrDiscount && b.offerId !== 'custom_discount' && !/^(?:none|no discount|n\/?a|nil)$/i.test(customReason)) {
-        blockLines.push(`Reason: ${customReason}`);
+      if (customNoteToDisplay && b.offerId !== 'custom_discount' && b.offerId !== 'none') {
+        blockLines.push(customNoteToDisplay);
       }
 
       blocks.push(blockLines.join('\n'));
@@ -775,8 +776,9 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       const isComp = b.offerId === 'complimentary' || b.isComplimentary || (OFFERS.find(o => o.id === b.offerId)?.isComplimentary);
       const shortGame = getShortGameName(b.gameName);
       const paxStr = pad2(b.players || 1);
-      const customReason = (b.customDiscountReason || '').trim();
-      const hasOfferOrDiscount = (b.offerId && b.offerId !== 'none') || (Number(b.discountPercent) > 0) || isComp;
+      const rawCustom = (b.customDiscountReason || b.customNote || '').trim();
+      const isGenericOrDuplicate = /^(?:none|no discount|n\/?a|nil|district\s*app|website\s*booking|activity\s*kids)$/i.test(rawCustom);
+      const customNoteToDisplay = !isGenericOrDuplicate ? rawCustom : '';
       const discountSentence = generateBookingNoteSentence(b);
 
       const blockLines = [];
@@ -789,8 +791,8 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       blockLines.push(``);
       blockLines.push(discountSentence);
 
-      if (customReason && hasOfferOrDiscount && b.offerId !== 'custom_discount' && !/^(?:none|no discount|n\/?a|nil)$/i.test(customReason)) {
-        blockLines.push(`Reason: ${customReason}`);
+      if (customNoteToDisplay && b.offerId !== 'custom_discount' && b.offerId !== 'none') {
+        blockLines.push(customNoteToDisplay);
       }
 
       noteBlocks.push(blockLines.join('\n'));
