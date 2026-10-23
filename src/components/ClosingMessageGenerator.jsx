@@ -706,8 +706,8 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     lines.push(``);
     lines.push(`No.of games:*${pad2(gameStats.bank.games)}*`);
     lines.push(`Total players:*${pad2(gameStats.bank.players)}*`);
-    if (gameStats.bank.complimentaryGames > 0) {
-      lines.push(`Complementary game: *${pad2(gameStats.bank.complimentaryGames)}*`);
+    if (gameStats.bank.complimentaryPlayers > 0) {
+      lines.push(`Complementary game: *${pad2(gameStats.bank.complimentaryPlayers)}*`);
     }
     lines.push(`*Sale : ${gameStats.bank.sale > 0 ? gameStats.bank.sale : '00'}*`);
     lines.push(``);
@@ -717,8 +717,8 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     lines.push(``);
     lines.push(`No. of games: *${pad2(gameStats.mummy.games)}*`);
     lines.push(`Total players:*${pad2(gameStats.mummy.players)}*`);
-    if (gameStats.mummy.complimentaryGames > 0) {
-      lines.push(`Complementary game: *${pad2(gameStats.mummy.complimentaryGames)}*`);
+    if (gameStats.mummy.complimentaryPlayers > 0) {
+      lines.push(`Complementary game: *${pad2(gameStats.mummy.complimentaryPlayers)}*`);
     }
     lines.push(`*Sale :${gameStats.mummy.sale > 0 ? gameStats.mummy.sale : '00'}*`);
     lines.push(`Who went in as Mummy:`);
@@ -733,8 +733,8 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     lines.push(``);
     lines.push(`No.of games: *${pad2(gameStats.prison.games)}*`);
     lines.push(`Total players: *${pad2(gameStats.prison.players)}*`);
-    if (gameStats.prison.complimentaryGames > 0) {
-      lines.push(`Complementary game: *${pad2(gameStats.prison.complimentaryGames)}*`);
+    if (gameStats.prison.complimentaryPlayers > 0) {
+      lines.push(`Complementary game: *${pad2(gameStats.prison.complimentaryPlayers)}*`);
     }
     lines.push(`*Sale : ${gameStats.prison.sale > 0 ? gameStats.prison.sale : '00'}*`);
     lines.push(``);
@@ -744,8 +744,8 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     lines.push(``);
     lines.push(`No.of games :*${pad2(gameStats.biryani.games)}*`);
     lines.push(`Total players :*${pad2(gameStats.biryani.players)}*`);
-    if (gameStats.biryani.complimentaryGames > 0) {
-      lines.push(`Complementary game: *${pad2(gameStats.biryani.complimentaryGames)}*`);
+    if (gameStats.biryani.complimentaryPlayers > 0) {
+      lines.push(`Complementary game: *${pad2(gameStats.biryani.complimentaryPlayers)}*`);
     }
     lines.push(`*Sale : ${gameStats.biryani.sale > 0 ? gameStats.biryani.sale : '00'}*`);
     lines.push(``);
