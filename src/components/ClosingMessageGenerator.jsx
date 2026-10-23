@@ -72,6 +72,11 @@ export const formatCustomNoteGrammar = (note) => {
   return cleaned;
 };
 
+export const pad2 = (num) => {
+  const n = Number(num) || 0;
+  return n.toString().padStart(2, '0');
+};
+
 export const getShortGameName = (gameName) => {
   if (!gameName) return 'Escape Room';
   const lower = gameName.toLowerCase();
@@ -91,7 +96,7 @@ export const getShortGameName = (gameName) => {
  * (Nayeem / 900 reference completely stripped)
  */
 export const generateBookingNoteSentence = (booking) => {
-  const pax = booking.players || 1;
+  const pax = pad2(booking.players || 1);
   const room = getShortGameName(booking.gameName);
   const offerId = booking.offerId || 'none';
   const offer = OFFERS.find(o => o.id === offerId);
@@ -119,16 +124,19 @@ export const generateBookingNoteSentence = (booking) => {
   // 3. Custom Discount
   if (offerId === 'custom_discount' || offer?.isCustomPercent) {
     const reasonPart = customReason ? customReason : 'custom discount';
-    return `Given ${pct}% discount to group of ${pax} players for ${room} as ${reasonPart}.`;
+    return `Given ${pct}% discount to group of ${pax} players for ${room} as ${reasonPart} and as per ${ref} reference.`;
   }
 
   // 4. Standard Discounts (Cross Promo, Second Game, Birthday, Corporate, High Prices, etc.)
   if (pct > 0 || (offer && offerId !== 'none')) {
-    const reasonText = offer?.reasonText || customReason || 'special offer';
+    const reasonText = offer?.reasonText || offer?.name || 'special offer';
     return `Given ${pct}% discount to group of ${pax} players for ${room} as ${reasonText} and as per ${ref} reference.`;
   }
 
-  // Standard rate booking with note
+  // Standard rate booking with custom note
+  if (customReason) {
+    return customReason;
+  }
   return `Today we had a group of ${pax} players for ${room}.`;
 };
 
@@ -648,13 +656,9 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       const isComp = b.offerId === 'complimentary' || b.isComplimentary || (OFFERS.find(o => o.id === b.offerId)?.isComplimentary);
       const shortGame = getShortGameName(b.gameName);
       const paxStr = pad2(b.players || 1);
-      const rawReason = (b.customDiscountReason || b.customNote || '').trim();
-      let noteSentence = '';
-      if (rawReason && !/^(?:district\s*app|website\s*booking|activity\s*kids)$/i.test(rawReason)) {
-        noteSentence = rawReason;
-      } else {
-        noteSentence = generateBookingNoteSentence(b);
-      }
+      const customReason = (b.customDiscountReason || '').trim();
+      const hasOfferOrDiscount = (b.offerId && b.offerId !== 'none') || (Number(b.discountPercent) > 0) || isComp;
+      const discountSentence = generateBookingNoteSentence(b);
 
       const blockLines = [];
       if (!isComp) {
@@ -664,7 +668,11 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       blockLines.push(`Pax-${paxStr}`);
       blockLines.push(`Played ${shortGame}`);
       blockLines.push(``);
-      blockLines.push(noteSentence);
+      blockLines.push(discountSentence);
+
+      if (customReason && hasOfferOrDiscount && b.offerId !== 'custom_discount' && !/^(?:none|no discount|n\/?a|nil)$/i.test(customReason)) {
+        blockLines.push(`Reason: ${customReason}`);
+      }
 
       blocks.push(blockLines.join('\n'));
     });
@@ -767,13 +775,9 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       const isComp = b.offerId === 'complimentary' || b.isComplimentary || (OFFERS.find(o => o.id === b.offerId)?.isComplimentary);
       const shortGame = getShortGameName(b.gameName);
       const paxStr = pad2(b.players || 1);
-      const rawReason = (b.customDiscountReason || b.customNote || '').trim();
-      let noteSentence = '';
-      if (rawReason && !/^(?:district\s*app|website\s*booking|activity\s*kids)$/i.test(rawReason)) {
-        noteSentence = rawReason;
-      } else {
-        noteSentence = generateBookingNoteSentence(b);
-      }
+      const customReason = (b.customDiscountReason || '').trim();
+      const hasOfferOrDiscount = (b.offerId && b.offerId !== 'none') || (Number(b.discountPercent) > 0) || isComp;
+      const discountSentence = generateBookingNoteSentence(b);
 
       const blockLines = [];
       if (!isComp) {
@@ -783,7 +787,11 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       blockLines.push(`Pax-${paxStr}`);
       blockLines.push(`Played ${shortGame}`);
       blockLines.push(``);
-      blockLines.push(noteSentence);
+      blockLines.push(discountSentence);
+
+      if (customReason && hasOfferOrDiscount && b.offerId !== 'custom_discount' && !/^(?:none|no discount|n\/?a|nil)$/i.test(customReason)) {
+        blockLines.push(`Reason: ${customReason}`);
+      }
 
       noteBlocks.push(blockLines.join('\n'));
     });
