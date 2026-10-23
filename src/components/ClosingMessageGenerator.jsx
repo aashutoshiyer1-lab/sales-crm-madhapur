@@ -72,6 +72,16 @@ export const formatCustomNoteGrammar = (note) => {
   return cleaned;
 };
 
+export const getShortGameName = (gameName) => {
+  if (!gameName) return 'Escape Room';
+  const lower = gameName.toLowerCase();
+  if (lower.includes('bank')) return 'Bank';
+  if (lower.includes('mummy')) return 'Mummy';
+  if (lower.includes('prison')) return 'Prison';
+  if (lower.includes('recipe') || lower.includes('biryani')) return 'Biryani';
+  return gameName;
+};
+
 /**
  * Construct the base sentence for each booking note:
  * - Website / District / Activity Kids
@@ -82,7 +92,7 @@ export const formatCustomNoteGrammar = (note) => {
  */
 export const generateBookingNoteSentence = (booking) => {
   const pax = booking.players || 1;
-  const room = booking.gameName || 'Escape Room';
+  const room = getShortGameName(booking.gameName);
   const offerId = booking.offerId || 'none';
   const offer = OFFERS.find(o => o.id === offerId);
   const rawRef = booking.reference ? booking.reference : (offer?.defaultReference || 'Khaja Sir');
@@ -92,13 +102,13 @@ export const generateBookingNoteSentence = (booking) => {
 
   // 1. Website / District / Activity Kids (Prepaid)
   if (offerId === 'website_booking' || offer?.channel === 'Website') {
-    return `Today we had a group of ${pax} who made booking through Website for ${room}.`;
+    return `Customer came through website, so we saved their bill in Razorpay.`;
   }
   if (offerId === 'district_app' || offer?.channel === 'District') {
-    return `Today we had a group of ${pax} who made booking through District for ${room}.`;
+    return `Customer came through district app, so we saved their bill in prepaid by district.`;
   }
   if (offerId === 'activity_kids' || offer?.channel === 'Activity Kids') {
-    return `Today we had a group of ${pax} who made booking through Activity Kids for ${room}.`;
+    return `Customer came through Activity Kids, so we saved their bill in Activity Kids.`;
   }
 
   // 2. Complimentary under 5
@@ -550,8 +560,55 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     setManualDiscountEntries(prev => prev.filter(e => e.id !== id));
   };
 
-  // Group discount/note bookings by room for WhatsApp note section & print preview
-  const groupedRoomNotes = useMemo(() => {
+  // Payment breakdown across day's bookings
+  const paymentBreakdown = useMemo(() => {
+    const totals = {
+      cash: 0,
+      gpay: 0,
+      card: 0,
+      razorpay: 0,
+      district: 0,
+      activityKidz: 0
+    };
+
+    dayBookings.forEach(b => {
+      const isComp = isComplimentaryBooking(b) || b.offerId === 'complimentary' || Number(b.finalTotal) === 0;
+      if (isComp) return;
+
+      if (b.payments && typeof b.payments === 'object') {
+        Object.entries(b.payments).forEach(([mode, amt]) => {
+          const val = Number(amt) || 0;
+          if (val <= 0) return;
+          const lower = mode.toLowerCase();
+          if (lower.includes('cash')) {
+            totals.cash += val;
+          } else if (lower.includes('upi') || lower.includes('gpay') || lower.includes('google')) {
+            totals.gpay += val;
+          } else if (lower.includes('card')) {
+            totals.card += val;
+          } else if (lower.includes('razorpay') || lower.includes('website')) {
+            totals.razorpay += val;
+          } else if (lower.includes('district')) {
+            totals.district += val;
+          } else if (lower.includes('activity')) {
+            totals.activityKidz += val;
+          } else {
+            totals.cash += val;
+          }
+        });
+      }
+    });
+
+    return totals;
+  }, [dayBookings]);
+
+  const formatPaymentModeAmt = (amt) => {
+    const n = Number(amt) || 0;
+    return n > 0 ? `${n}/-` : '00/-';
+  };
+
+  // All bookings with offers, discounts, or notes
+  const allNoteBookings = useMemo(() => {
     const discountOrNoteBookings = dayBookings.filter(b => {
       const hasOffer = b.offerId && b.offerId !== 'none';
       const hasDiscount = (Number(b.discountPercent) > 0) || (Number(b.discountAmount) > 0);
@@ -561,15 +618,18 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       return hasOffer || hasDiscount || hasReason || hasCustomNote || hasNotes;
     });
 
-    const combinedList = [...discountOrNoteBookings, ...manualDiscountEntries];
+    return [...discountOrNoteBookings, ...manualDiscountEntries];
+  }, [dayBookings, manualDiscountEntries]);
 
+  // Group discount/note bookings by room for UI reference
+  const groupedRoomNotes = useMemo(() => {
     const roomMap = new Map();
     // Pre-populate with standard GAMES from venueData
     GAMES.forEach(g => {
       roomMap.set(g.name, []);
     });
 
-    combinedList.forEach(b => {
+    allNoteBookings.forEach(b => {
       const room = b.gameName || 'Other Rooms';
       if (!roomMap.has(room)) {
         roomMap.set(room, []);
@@ -578,45 +638,48 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     });
 
     return roomMap;
-  }, [dayBookings, manualDiscountEntries]);
+  }, [allNoteBookings]);
 
-  // Auto-generated print text from grouped room notes
+  // Auto-generated print text from note bookings
   const autoGeneratedPrintNotes = useMemo(() => {
-    const sections = [];
-    groupedRoomNotes.forEach((roomBookings, roomName) => {
-      if (roomBookings.length === 0) return;
-      const lines = [];
-      lines.push(`*${roomName.toUpperCase()}*`);
-      roomBookings.forEach((b, index) => {
-        const isComp = b.offerId === 'complimentary' || b.isComplimentary || (OFFERS.find(o => o.id === b.offerId)?.isComplimentary);
-        const userReason = (b.customDiscountReason || b.customNote || '').trim();
+    const blocks = [];
 
-        if (userReason) {
-          lines.push(`${index + 1}. ${userReason}`);
-        } else {
-          lines.push(`${index + 1}. ${generateBookingNoteSentence(b)}`);
-        }
+    allNoteBookings.forEach((b) => {
+      const isComp = b.offerId === 'complimentary' || b.isComplimentary || (OFFERS.find(o => o.id === b.offerId)?.isComplimentary);
+      const shortGame = getShortGameName(b.gameName);
+      const paxStr = pad2(b.players || 1);
+      const rawReason = (b.customDiscountReason || b.customNote || '').trim();
+      let noteSentence = '';
+      if (rawReason && !/^(?:district\s*app|website\s*booking|activity\s*kids)$/i.test(rawReason)) {
+        noteSentence = rawReason;
+      } else {
+        noteSentence = generateBookingNoteSentence(b);
+      }
 
-        if (!isComp) {
-          lines.push(`Customer Name: ${b.customerName || 'N/A'}`);
-          lines.push(`Mobile Number: ${b.customerPhone || 'N/A'}`);
-        }
-        lines.push(``);
-      });
-      sections.push(lines.join('\n').trim());
+      const blockLines = [];
+      if (!isComp) {
+        blockLines.push(`Customer: ${b.customerName || 'N/A'}`);
+        blockLines.push(`Mobile.No: ${b.customerPhone || 'N/A'}`);
+      }
+      blockLines.push(`Pax-${paxStr}`);
+      blockLines.push(`Played ${shortGame}`);
+      blockLines.push(``);
+      blockLines.push(noteSentence);
+
+      blocks.push(blockLines.join('\n'));
     });
 
     const cleanManual = closingNote.trim();
     if (cleanManual && !/^(?:none|no discount|n\/?a|nil)$/i.test(cleanManual)) {
-      sections.push(`*ADDITIONAL NOTES:*\n${cleanManual}`);
+      blocks.push(`NOTE:\n${cleanManual}`);
     }
 
-    if (sections.length === 0) {
+    if (blocks.length === 0) {
       return "No special discounts, offers, or notes recorded for this date.";
     }
 
-    return sections.join('\n\n');
-  }, [groupedRoomNotes, closingNote]);
+    return blocks.join('\n\n');
+  }, [allNoteBookings, closingNote]);
 
   // Construct Exact WhatsApp Closing Message Text
   const generatedMessage = useMemo(() => {
@@ -653,8 +716,6 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     if (mummyActors.length > 0) {
       const actorString = mummyActors.map(a => `${a.name}×${a.count}`).join(', ');
       lines.push(actorString);
-    } else {
-      lines.push(`None`);
     }
     lines.push(``);
 
@@ -680,6 +741,15 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     lines.push(`*Sale : ${gameStats.biryani.sale > 0 ? gameStats.biryani.sale : '00'}*`);
     lines.push(``);
 
+    // Payment Modes Breakdown
+    lines.push(`*Cash:${formatPaymentModeAmt(paymentBreakdown.cash)}*`);
+    lines.push(`*Gpay:${formatPaymentModeAmt(paymentBreakdown.gpay)}*`);
+    lines.push(`*Card:${formatPaymentModeAmt(paymentBreakdown.card)}*`);
+    lines.push(`*Razorpay:${formatPaymentModeAmt(paymentBreakdown.razorpay)}*`);
+    lines.push(`*Prepaid by district:${formatPaymentModeAmt(paymentBreakdown.district)}*`);
+    lines.push(`*Prepaid by Activity kidz:${formatPaymentModeAmt(paymentBreakdown.activityKidz)}*`);
+    lines.push(``);
+
     // Totals
     const formattedOverall = overallSale > 0 ? `${formatIndianNumber(overallSale)}/-` : `00/-`;
     lines.push(`*Overall sale:${formattedOverall}*`);
@@ -688,43 +758,44 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     lines.push(`*Short:${shortAmount.trim() || '00'}*`);
     lines.push(``);
 
-    // Note
+    // Note Section
     lines.push(`*NOTE:-*`);
+    lines.push(``);
 
-    const roomBlocks = [];
-    groupedRoomNotes.forEach((roomBookings, roomName) => {
-      if (roomBookings.length === 0) return;
-      const sectionLines = [];
-      sectionLines.push(`*${roomName.toUpperCase()}*`);
-      roomBookings.forEach((b, index) => {
-        const itemLines = [];
-        const isComp = b.offerId === 'complimentary' || b.isComplimentary || (OFFERS.find(o => o.id === b.offerId)?.isComplimentary);
-        const userReason = (b.customDiscountReason || b.customNote || '').trim();
+    const noteBlocks = [];
+    allNoteBookings.forEach((b) => {
+      const isComp = b.offerId === 'complimentary' || b.isComplimentary || (OFFERS.find(o => o.id === b.offerId)?.isComplimentary);
+      const shortGame = getShortGameName(b.gameName);
+      const paxStr = pad2(b.players || 1);
+      const rawReason = (b.customDiscountReason || b.customNote || '').trim();
+      let noteSentence = '';
+      if (rawReason && !/^(?:district\s*app|website\s*booking|activity\s*kids)$/i.test(rawReason)) {
+        noteSentence = rawReason;
+      } else {
+        noteSentence = generateBookingNoteSentence(b);
+      }
 
-        if (userReason) {
-          itemLines.push(`${index + 1}. ${userReason}`);
-        } else {
-          itemLines.push(`${index + 1}. ${generateBookingNoteSentence(b)}`);
-        }
+      const blockLines = [];
+      if (!isComp) {
+        blockLines.push(`Customer: ${b.customerName || 'N/A'}`);
+        blockLines.push(`Mobile.No: ${b.customerPhone || 'N/A'}`);
+      }
+      blockLines.push(`Pax-${paxStr}`);
+      blockLines.push(`Played ${shortGame}`);
+      blockLines.push(``);
+      blockLines.push(noteSentence);
 
-        if (!isComp) {
-          itemLines.push(`Customer Name: ${b.customerName || 'N/A'}`);
-          itemLines.push(`Mobile Number: ${b.customerPhone || 'N/A'}`);
-        }
-
-        sectionLines.push(itemLines.join('\n'));
-      });
-      roomBlocks.push(sectionLines.join('\n\n'));
+      noteBlocks.push(blockLines.join('\n'));
     });
 
     // Manual Staff Closing Notes (if any, never print "None")
     const cleanManualNote = closingNote.trim();
     if (cleanManualNote && !/^(?:none|no discount|n\/?a|nil)$/i.test(cleanManualNote)) {
-      roomBlocks.push(cleanManualNote);
+      noteBlocks.push(cleanManualNote);
     }
 
-    if (roomBlocks.length > 0) {
-      lines.push(roomBlocks.join('\n\n'));
+    if (noteBlocks.length > 0) {
+      lines.push(noteBlocks.join('\n\n'));
     }
     lines.push(``);
 
@@ -736,12 +807,13 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     formattedDisplayDate,
     gameStats,
     mummyActors,
+    paymentBreakdown,
     overallSale,
     excessAmount,
     shortAmount,
     closingNote,
     finalStaffName,
-    groupedRoomNotes
+    allNoteBookings
   ]);
 
   const activeMessage = (isEditMessageMode && customFullMessage) ? customFullMessage : generatedMessage;
