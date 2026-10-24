@@ -24,6 +24,7 @@ import {
   parseTimeToMinutes,
   formatTime24h,
   getPlayerCategory,
+  getBookingCategory,
   isComplimentaryBooking,
   BRANCH_INFO
 } from '../config/venueData';
@@ -43,21 +44,15 @@ export default function SalesDashboard({
   const [selectedPaymentMode, setSelectedPaymentMode] = useState('ALL');
   const [copiedStatus, setCopiedStatus] = useState(false);
 
-  // Helper to get resolved player category (strictly honors manual override / saved category)
+  // Helper to get resolved player category:
+  // Strictly honors actual player count for standard bookings (2-3, 4-6, 7+)
+  // For complimentary bookings, honors saved category override or default '4–6 Players'
   const getDisplayCategory = (booking) => {
     if (!booking) return '2–3 Players';
-    const cat = booking.playerCategory || booking.categoryOverride || booking.customCategory;
-    if (cat) {
-      if (cat.includes('7')) return '7+ Players';
-      if (cat.includes('4') || cat.includes('5') || cat.includes('6')) return '4–6 Players';
-      if (cat.includes('2') || cat.includes('3')) return '2–3 Players';
-      return cat;
-    }
-    return getPlayerCategory(booking.players);
+    return getBookingCategory(booking, bookings);
   };
 
-  // When category changes from 4-6 to 7+ (or vice versa), pop up the complete booking modal
-  // with customer details, new tier & recalculated amounts so cash/card totals can be balanced!
+  // When category changes from 4-6 to 7+ (or vice versa), instantly sync to database
   const handleCategoryChange = (booking, newCategory) => {
     if (!booking) return;
     const currentCategory = getDisplayCategory(booking);
@@ -95,11 +90,11 @@ export default function SalesDashboard({
       updatedAt: new Date().toISOString()
     };
 
-    // Pop up the complete customer details modal so amounts and cash/card payments can be confirmed & saved
-    if (onOpenBookingModal) {
-      onOpenBookingModal(updated);
-    } else if (onUpdateBooking) {
+    // Instantly save to database & update state
+    if (onUpdateBooking) {
       onUpdateBooking(updated);
+    } else if (onOpenBookingModal) {
+      onOpenBookingModal(updated);
     }
   };
 

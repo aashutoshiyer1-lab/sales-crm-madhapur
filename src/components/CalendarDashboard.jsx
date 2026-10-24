@@ -25,7 +25,8 @@ import {
   MODES_REQUIRING_SCREENSHOT,
   GAMES,
   shiftDateString,
-  getTodayDateString
+  getTodayDateString,
+  getBookingCategory
 } from '../config/venueData';
 import { formatCurrency, getPaidTotal } from '../utils/pricingEngine';
 
@@ -426,7 +427,7 @@ export default function CalendarDashboard({
                                 <span className="text-xs font-bold text-slate-500">60 Mins •</span>
                                 <span className="font-mono text-blue-900 font-black text-xs">{booking.players} Players</span>
                                 <span className="text-[10px] font-black text-blue-800 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
-                                  {booking.playerCategory || booking.categoryOverride || getPlayerCategory(booking.players)}
+                                  {getBookingCategory(booking)}
                                 </span>
                               </div>
                             </div>

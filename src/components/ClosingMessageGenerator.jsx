@@ -141,6 +141,95 @@ export const generateBookingNoteSentence = (booking) => {
 };
 
 /**
+ * Calculates aggregated discount lines for each game room:
+ * e.g. 2nd Game Discount(20%):*04*
+ * e.g. Birthday Package(15%):*04*
+ * e.g. Comeback Offer(15%):*04*
+ * e.g. Customer Going Back(10%):*04*
+ * e.g. Corporate Package(15%):*10*
+ * e.g. Cross Promotion Coupon(30%):*04*
+ * e.g. Cross Promotion Brochure(30%):*04*
+ */
+export const getGameDiscounts = (gameKey, dayBookings = [], manualDiscountEntries = []) => {
+  const matchesRoom = (gameName, key) => {
+    const g = (gameName || '').toLowerCase();
+    if (key === 'bank') return g.includes('bank');
+    if (key === 'mummy') return g.includes('mummy');
+    if (key === 'prison') return g.includes('prison');
+    if (key === 'biryani') return g.includes('recipe') || g.includes('biryani');
+    return false;
+  };
+
+  const roomBookings = [
+    ...dayBookings.filter(b => matchesRoom(b.gameName, gameKey)),
+    ...manualDiscountEntries.filter(b => matchesRoom(b.gameName, gameKey))
+  ];
+
+  // Map of `${label}_${pct}` -> { label, pct, players }
+  const discountMap = new Map();
+
+  roomBookings.forEach(b => {
+    const isComp = isComplimentaryBooking(b) || b.offerId === 'complimentary' || Number(b.finalTotal) === 0;
+    if (isComp) return; // Pure complimentary is handled separately as Complementary game
+
+    const offerId = b.offerId || 'none';
+    const isPrepaid = offerId === 'website_booking' || offerId === 'district_app' || offerId === 'activity_kids';
+    if (isPrepaid) return;
+
+    const offer = OFFERS.find(o => o.id === offerId);
+    const pct = (b.discountPercent !== undefined && b.discountPercent !== null && Number(b.discountPercent) > 0)
+      ? Number(b.discountPercent)
+      : (offer?.discountPercent || 0);
+
+    if (pct <= 0 && offerId === 'none') return;
+
+    let label = 'Discount';
+    const rawId = (offerId || '').toLowerCase();
+    const rawName = (offer?.name || b.offerName || '').toLowerCase();
+    const rawReason = (b.customDiscountReason || '').trim();
+
+    if (rawId === 'second_game' || rawName.includes('second game') || rawName.includes('2nd game')) {
+      label = '2nd Game Discount';
+    } else if (rawId === 'birthday_package' || rawName.includes('birthday')) {
+      label = 'Birthday Package';
+    } else if (rawId === 'comeback_offer' || rawName.includes('comeback')) {
+      label = 'Comeback Offer';
+    } else if (rawId === 'high_price_retention' || rawName.includes('going back') || rawName.includes('high price')) {
+      label = 'Customer Going Back';
+    } else if (rawId === 'corporate_package' || rawName.includes('corporate')) {
+      label = 'Corporate Package';
+    } else if (rawId === 'cross_promotion' || (rawName.includes('cross') && (rawName.includes('coupon') || rawId.includes('coupon')))) {
+      label = 'Cross Promotion Coupon';
+    } else if (rawId === 'cross_promotion_brochure' || (rawName.includes('cross') && (rawName.includes('brochure') || rawName.includes('broucher')))) {
+      label = 'Cross Promotion Brochure';
+    } else if (rawReason) {
+      label = rawReason;
+    } else if (offer?.name) {
+      label = offer.name;
+    } else if (b.offerName) {
+      label = b.offerName;
+    }
+
+    const key = `${label}_${pct}`;
+    const pCount = Number(b.players) || 1;
+
+    if (discountMap.has(key)) {
+      discountMap.get(key).players += pCount;
+    } else {
+      discountMap.set(key, { label, pct, players: pCount });
+    }
+  });
+
+  const lines = [];
+  discountMap.forEach(({ label, pct, players }) => {
+    const pctStr = pct > 0 ? `(${pct}%)` : '';
+    lines.push(`${label}${pctStr}:*${pad2(players)}*`);
+  });
+
+  return lines;
+};
+
+/**
  * Opens a print window with monospace typography and triggers window.print()
  */
 export const executePrintWindow = (title, textContent) => {
@@ -437,6 +526,12 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     return stats;
   }, [dayBookings]);
 
+  // Discounts breakdown per game for closing message & card overview
+  const bankDiscounts = useMemo(() => getGameDiscounts('bank', dayBookings, manualDiscountEntries), [dayBookings, manualDiscountEntries]);
+  const mummyDiscounts = useMemo(() => getGameDiscounts('mummy', dayBookings, manualDiscountEntries), [dayBookings, manualDiscountEntries]);
+  const prisonDiscounts = useMemo(() => getGameDiscounts('prison', dayBookings, manualDiscountEntries), [dayBookings, manualDiscountEntries]);
+  const biryaniDiscounts = useMemo(() => getGameDiscounts('biryani', dayBookings, manualDiscountEntries), [dayBookings, manualDiscountEntries]);
+
   // Overall Sale
   const overallSale = useMemo(() => {
     return (
@@ -667,7 +762,23 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
         blockLines.push(`Mobile.No: ${b.customerPhone || 'N/A'}`);
       }
       blockLines.push(`Pax-${paxStr}`);
-      blockLines.push(`Played ${shortGame}`);
+      // Detect companion games played by this same customer today (e.g. Bank & Prison)
+      let playedGamesDisplay = shortGame;
+      if (b.customerPhone || b.customerName) {
+        const matchingRooms = dayBookings
+          .filter(other => {
+            if (b.customerPhone && other.customerPhone && b.customerPhone.trim() === other.customerPhone.trim()) return true;
+            if (b.customerName && other.customerName && b.customerName.trim().toLowerCase() === other.customerName.trim().toLowerCase()) return true;
+            return false;
+          })
+          .map(other => getShortGameName(other.gameName));
+
+        const uniqueRooms = Array.from(new Set([shortGame, ...matchingRooms]));
+        if (uniqueRooms.length > 1) {
+          playedGamesDisplay = uniqueRooms.join(' & ');
+        }
+      }
+      blockLines.push(`Played ${playedGamesDisplay}`);
       blockLines.push(``);
       blockLines.push(discountSentence);
 
@@ -709,6 +820,8 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     if (gameStats.bank.complimentaryPlayers > 0) {
       lines.push(`Complementary game: *${pad2(gameStats.bank.complimentaryPlayers)}*`);
     }
+    const bankDiscounts = getGameDiscounts('bank', dayBookings, manualDiscountEntries);
+    bankDiscounts.forEach(d => lines.push(d));
     lines.push(`*Sale : ${gameStats.bank.sale > 0 ? gameStats.bank.sale : '00'}*`);
     lines.push(``);
 
@@ -720,11 +833,12 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     if (gameStats.mummy.complimentaryPlayers > 0) {
       lines.push(`Complementary game: *${pad2(gameStats.mummy.complimentaryPlayers)}*`);
     }
+    const mummyDiscounts = getGameDiscounts('mummy', dayBookings, manualDiscountEntries);
+    mummyDiscounts.forEach(d => lines.push(d));
     lines.push(`*Sale :${gameStats.mummy.sale > 0 ? gameStats.mummy.sale : '00'}*`);
     lines.push(`Who went in as Mummy:`);
     if (mummyActors.length > 0) {
-      const actorString = mummyActors.map(a => `${a.name}×${a.count}`).join(', ');
-      lines.push(actorString);
+      mummyActors.forEach(a => lines.push(`${a.name}×${a.count}`));
     }
     lines.push(``);
 
@@ -736,6 +850,8 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     if (gameStats.prison.complimentaryPlayers > 0) {
       lines.push(`Complementary game: *${pad2(gameStats.prison.complimentaryPlayers)}*`);
     }
+    const prisonDiscounts = getGameDiscounts('prison', dayBookings, manualDiscountEntries);
+    prisonDiscounts.forEach(d => lines.push(d));
     lines.push(`*Sale : ${gameStats.prison.sale > 0 ? gameStats.prison.sale : '00'}*`);
     lines.push(``);
 
@@ -747,6 +863,8 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     if (gameStats.biryani.complimentaryPlayers > 0) {
       lines.push(`Complementary game: *${pad2(gameStats.biryani.complimentaryPlayers)}*`);
     }
+    const biryaniDiscounts = getGameDiscounts('biryani', dayBookings, manualDiscountEntries);
+    biryaniDiscounts.forEach(d => lines.push(d));
     lines.push(`*Sale : ${gameStats.biryani.sale > 0 ? gameStats.biryani.sale : '00'}*`);
     lines.push(``);
 
@@ -787,7 +905,23 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
         blockLines.push(`Mobile.No: ${b.customerPhone || 'N/A'}`);
       }
       blockLines.push(`Pax-${paxStr}`);
-      blockLines.push(`Played ${shortGame}`);
+      // Detect companion games played by this same customer today (e.g. Bank & Prison)
+      let playedGamesDisplay = shortGame;
+      if (b.customerPhone || b.customerName) {
+        const matchingRooms = dayBookings
+          .filter(other => {
+            if (b.customerPhone && other.customerPhone && b.customerPhone.trim() === other.customerPhone.trim()) return true;
+            if (b.customerName && other.customerName && b.customerName.trim().toLowerCase() === other.customerName.trim().toLowerCase()) return true;
+            return false;
+          })
+          .map(other => getShortGameName(other.gameName));
+
+        const uniqueRooms = Array.from(new Set([shortGame, ...matchingRooms]));
+        if (uniqueRooms.length > 1) {
+          playedGamesDisplay = uniqueRooms.join(' & ');
+        }
+      }
+      blockLines.push(`Played ${playedGamesDisplay}`);
       blockLines.push(``);
       blockLines.push(discountSentence);
 
@@ -823,7 +957,9 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     shortAmount,
     closingNote,
     finalStaffName,
-    allNoteBookings
+    allNoteBookings,
+    dayBookings,
+    manualDiscountEntries
   ]);
 
   const activeMessage = (isEditMessageMode && customFullMessage) ? customFullMessage : generatedMessage;
@@ -939,6 +1075,15 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                     <span className="text-[10px] text-slate-500 font-bold block">Sale (₹)</span>
                     <span className="font-mono font-black text-blue-900 text-sm">*{gameStats.bank.sale > 0 ? gameStats.bank.sale : '00'}*</span>
                   </div>
+                  {bankDiscounts.length > 0 && (
+                    <div className="col-span-3 mt-1.5 pt-1 border-t border-blue-200/60 space-y-0.5">
+                      {bankDiscounts.map(d => (
+                        <span key={d} className="block text-[10px] font-black text-amber-800">
+                          • {d.replace(/\*/g, '')}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -964,6 +1109,15 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                     <span className="text-[10px] text-slate-500 font-bold block">Sale (₹)</span>
                     <span className="font-mono font-black text-blue-900 text-sm">*{gameStats.mummy.sale > 0 ? gameStats.mummy.sale : '00'}*</span>
                   </div>
+                  {mummyDiscounts.length > 0 && (
+                    <div className="col-span-3 mt-1.5 pt-1 border-t border-blue-200/60 space-y-0.5">
+                      {mummyDiscounts.map(d => (
+                        <span key={d} className="block text-[10px] font-black text-amber-800">
+                          • {d.replace(/\*/g, '')}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -989,6 +1143,15 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                     <span className="text-[10px] text-slate-500 font-bold block">Sale (₹)</span>
                     <span className="font-mono font-black text-blue-900 text-sm">*{gameStats.prison.sale > 0 ? gameStats.prison.sale : '00'}*</span>
                   </div>
+                  {prisonDiscounts.length > 0 && (
+                    <div className="col-span-3 mt-1.5 pt-1 border-t border-blue-200/60 space-y-0.5">
+                      {prisonDiscounts.map(d => (
+                        <span key={d} className="block text-[10px] font-black text-amber-800">
+                          • {d.replace(/\*/g, '')}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1014,6 +1177,15 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                     <span className="text-[10px] text-slate-500 font-bold block">Sale (₹)</span>
                     <span className="font-mono font-black text-blue-900 text-sm">*{gameStats.biryani.sale > 0 ? gameStats.biryani.sale : '00'}*</span>
                   </div>
+                  {biryaniDiscounts.length > 0 && (
+                    <div className="col-span-3 mt-1.5 pt-1 border-t border-blue-200/60 space-y-0.5">
+                      {biryaniDiscounts.map(d => (
+                        <span key={d} className="block text-[10px] font-black text-amber-800">
+                          • {d.replace(/\*/g, '')}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

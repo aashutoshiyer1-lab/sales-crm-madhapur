@@ -12,7 +12,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
-import { BRANCH_INFO, MODES_REQUIRING_SCREENSHOT } from '../config/venueData';
+import { BRANCH_INFO, MODES_REQUIRING_SCREENSHOT, getBookingCategory } from '../config/venueData';
 import { formatCurrency, getPaidTotal } from '../utils/pricingEngine';
 
 export default function BookingDetailModal({
@@ -152,7 +152,7 @@ export default function BookingDetailModal({
                   <td className="py-3 px-4">
                     <p className="font-black text-slate-950">{booking.gameName}</p>
                     <p className="text-xs text-slate-500">
-                      Duration: 60 Mins • <span className="font-bold text-blue-900">{booking.playerCategory || booking.categoryOverride || `${booking.players} Players Category`}</span>
+                      Duration: 60 Mins • <span className="font-bold text-blue-900">{getBookingCategory(booking)}</span>
                     </p>
                   </td>
                   <td className="py-3 px-4 text-center font-mono font-bold">

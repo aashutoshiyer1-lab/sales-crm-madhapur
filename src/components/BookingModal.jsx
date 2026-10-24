@@ -30,6 +30,7 @@ import {
   isWeekend,
   getPlayerCategory,
   getBookingCategory,
+  isComplimentaryBooking,
   shiftDateString,
   getTodayDateString
 } from '../config/venueData';
@@ -204,7 +205,11 @@ export default function BookingModal({
   // Complimentary Game Category Cross-Verification Modal State
   const [showComplimentaryCategoryConfirm, setShowComplimentaryCategoryConfirm] = useState(false);
   const [categoryOverride, setCategoryOverride] = useState(() => {
-    return bookingToEdit?.categoryOverride || bookingToEdit?.customCategory || '4–6 Players';
+    const isComp = isComplimentaryBooking(bookingToEdit);
+    if (isComp) {
+      return bookingToEdit?.categoryOverride || bookingToEdit?.customCategory || '4–6 Players';
+    }
+    return getPlayerCategory(bookingToEdit?.players || 2);
   });
 
   // Real-time synchronization when bookingToEdit prop changes
@@ -218,7 +223,13 @@ export default function BookingModal({
       setGameName(bookingToEdit.gameName || '');
       setPlayers(bookingToEdit.players || '');
       setOfferId(bookingToEdit.offerId || 'none');
-      setCategoryOverride(bookingToEdit.categoryOverride || bookingToEdit.customCategory || '4–6 Players');
+      
+      const isComp = isComplimentaryBooking(bookingToEdit);
+      if (isComp) {
+        setCategoryOverride(bookingToEdit.categoryOverride || bookingToEdit.customCategory || '4–6 Players');
+      } else {
+        setCategoryOverride(getPlayerCategory(bookingToEdit.players || 2));
+      }
       
       const off = OFFERS.find(o => o.id === (bookingToEdit.offerId || 'none'));
       setDiscountPercent(
@@ -367,7 +378,18 @@ export default function BookingModal({
   }, [date, isCustomTime, slotGroups]);
 
   const isWeekendRate = rateType === 'weekend';
-  const isComplimentary = Boolean(offerId === 'complimentary' || selectedOfferObj?.isComplimentary);
+  const isComplimentary = Boolean(
+    offerId === 'complimentary' ||
+    selectedOfferObj?.isComplimentary ||
+    Number(discountPercent) === 100
+  );
+
+  // Auto-sync category with player count for non-complimentary bookings
+  useEffect(() => {
+    if (!isComplimentary && players) {
+      setCategoryOverride(getPlayerCategory(players));
+    }
+  }, [players, isComplimentary]);
 
   const isTier1Active = isComplimentary
     ? (categoryOverride.includes('2') || categoryOverride.includes('3'))
@@ -547,7 +569,11 @@ export default function BookingModal({
     }
 
     const selectedOfferObj = OFFERS.find(o => o.id === offerId);
-    const isComp = Boolean(selectedOfferObj?.isComplimentary || offerId === 'complimentary');
+    const isComp = Boolean(
+      selectedOfferObj?.isComplimentary ||
+      offerId === 'complimentary' ||
+      Number(discountPercent) === 100
+    );
 
     // Prompt/confirm pax bracket category for complimentary game (Kids Under 5 Years) via interactive Modal
     if (isComp) {
@@ -560,7 +586,11 @@ export default function BookingModal({
 
   const executeSaveBooking = (confirmedCategory = null) => {
     const selectedOfferObj = OFFERS.find(o => o.id === offerId);
-    const isComplimentary = Boolean(selectedOfferObj?.isComplimentary || offerId === 'complimentary');
+    const isComplimentary = Boolean(
+      selectedOfferObj?.isComplimentary ||
+      offerId === 'complimentary' ||
+      Number(discountPercent) === 100
+    );
     const numPlayers = Number(players) || 1;
 
     let finalReference = '';
@@ -593,7 +623,9 @@ export default function BookingModal({
     const shouldMarkPending = !isComplimentary && (isPending || (!isFullyPaid && pricing.finalTotal > 0));
     const trimmedCustomReason = customDiscountReason.trim();
 
-    const chosenCategory = confirmedCategory || categoryOverride || bookingToEdit?.playerCategory || getPlayerCategory(numPlayers);
+    const chosenCategory = isComplimentary
+      ? (confirmedCategory || categoryOverride || companionCategory || '4–6 Players')
+      : getPlayerCategory(numPlayers);
 
     const bookingData = {
       id: bookingToEdit?.id || `ETM-${Date.now()}-${Math.floor(Math.random() * 1000)}`,

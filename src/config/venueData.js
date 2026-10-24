@@ -88,7 +88,7 @@ export const OFFERS = [
     allowedPercents: [10, 20],
     defaultReference: "Khaja Sir",
     requiresReference: true,
-    reasonText: "it was their second game on the same day"
+    reasonText: "second game discount"
   },
   {
     id: "birthday_package",
@@ -97,23 +97,34 @@ export const OFFERS = [
     allowedPercents: [10, 15],
     defaultReference: "Khaja Sir",
     requiresReference: true,
-    reasonText: "they had birthday package"
+    reasonText: "birthday package"
+  },
+  {
+    id: "comeback_offer",
+    name: "Comeback Offer",
+    discountPercent: 15,
+    allowedPercents: [10, 15, 20],
+    defaultReference: "Khaja Sir",
+    requiresReference: true,
+    reasonText: "comeback offer"
   },
   {
     id: "corporate_package",
     name: "Corporate Package",
     discountPercent: 15,
+    allowedPercents: [10, 15, 20],
     defaultReference: "Khaja Sir",
     requiresReference: true,
-    reasonText: "it was corporate package"
+    reasonText: "corporate package"
   },
   {
     id: "high_price_retention",
-    name: "Going Back Due to High Prices",
+    name: "Customer Going Back",
     discountPercent: 10,
+    allowedPercents: [10, 15, 20],
     defaultReference: "Khaja Sir",
     requiresReference: true,
-    reasonText: "they were going back due to high prices"
+    reasonText: "customer was going back due to high prices"
   },
   {
     id: "complimentary",
@@ -162,61 +173,53 @@ export const getPlayerCategory = (playerCount) => {
 
 /**
  * Resolves player bracket category for any booking:
- * 1. Checks explicit categoryOverride or customCategory
- * 2. Sibling paid booking inheritance (same date, room & slot or matching customer phone)
- * 3. Fallback: >= 7 -> '7+ Players', >= 4 -> '4–6 Players', complimentary -> '4–6 Players', else '2–3 Players'
+ * - For non-complimentary games: strictly derives from actual player count (2-3, 4-6, 7+)
+ * - For complimentary games: checks explicit categoryOverride / customCategory / sibling / default '4–6 Players'
  */
 export const getBookingCategory = (booking, allBookings = []) => {
   if (!booking) return 'Not Set';
 
-  // 1. Direct explicit category override
-  const override = booking.categoryOverride || booking.customCategory;
-  if (override) {
-    const raw = String(override).trim();
-    if (raw.includes('2') || raw.includes('3')) return '2–3 Players';
-    if (raw.includes('4') || raw.includes('5') || raw.includes('6')) return '4–6 Players';
-    if (raw.includes('7')) return '7+ Players';
-    return raw;
-  }
+  const isComp = isComplimentaryBooking(booking);
 
-  const isComp = (
-    booking.offerId === 'complimentary' ||
-    Number(booking.discountPercent) === 100 ||
-    booking.finalTotal === 0 ||
-    (booking.offerName && booking.offerName.toLowerCase().includes('complimentary')) ||
-    (booking.notes && booking.notes.toLowerCase().includes('complimentary'))
-  );
-
-  // 2. Sibling paid booking inheritance
-  if (isComp && Array.isArray(allBookings) && allBookings.length > 0) {
-    const sibling = allBookings.find(b => {
-      if (!b || b.id === booking.id) return false;
-      const sameDate = b.date === booking.date;
-      const sameRoom = (b.gameName || '').toLowerCase() === (booking.gameName || '').toLowerCase();
-      const sameSlot = b.timeSlot === booking.timeSlot;
-      const samePhone = booking.customerPhone && b.customerPhone && b.customerPhone.trim() === booking.customerPhone.trim();
-      const isPaid = (Number(b.finalTotal) > 0) || (b.offerId !== 'complimentary' && Number(b.discountPercent) !== 100);
-      return sameDate && isPaid && ((sameRoom && sameSlot) || (samePhone && sameRoom));
-    });
-
-    if (sibling) {
-      if (sibling.categoryOverride || sibling.customCategory) {
-        return getBookingCategory(sibling, []);
-      }
-      const sibPax = Number(sibling.players) || 0;
-      if (sibPax >= 7) return '7+ Players';
-      if (sibPax >= 4) return '4–6 Players';
-      if (sibPax > 0) return '2–3 Players';
+  // 1. Complimentary bookings check explicit categoryOverride / customCategory / sibling
+  if (isComp) {
+    const override = booking.categoryOverride || booking.customCategory || booking.playerCategory;
+    if (override) {
+      const raw = String(override).trim();
+      if (raw.includes('2') || raw.includes('3')) return '2–3 Players';
+      if (raw.includes('4') || raw.includes('5') || raw.includes('6')) return '4–6 Players';
+      if (raw.includes('7')) return '7+ Players';
+      return raw;
     }
+
+    // Sibling paid booking inheritance
+    if (Array.isArray(allBookings) && allBookings.length > 0) {
+      const sibling = allBookings.find(b => {
+        if (!b || b.id === booking.id) return false;
+        const sameDate = b.date === booking.date;
+        const sameRoom = (b.gameName || '').toLowerCase() === (booking.gameName || '').toLowerCase();
+        const sameSlot = b.timeSlot === booking.timeSlot;
+        const samePhone = booking.customerPhone && b.customerPhone && b.customerPhone.trim() === booking.customerPhone.trim();
+        const isPaid = (Number(b.finalTotal) > 0) || (b.offerId !== 'complimentary' && Number(b.discountPercent) !== 100);
+        return sameDate && isPaid && ((sameRoom && sameSlot) || (samePhone && sameRoom));
+      });
+
+      if (sibling) {
+        if (sibling.categoryOverride || sibling.customCategory || sibling.playerCategory) {
+          return getBookingCategory(sibling, []);
+        }
+        const sibPax = Number(sibling.players) || 0;
+        if (sibPax >= 7) return '7+ Players';
+        if (sibPax >= 4) return '4–6 Players';
+        if (sibPax > 0) return '2–3 Players';
+      }
+    }
+
+    return '4–6 Players'; // Default complimentary family bracket
   }
 
-  // 3. Fallback
-  const pax = Number(booking.players) || 0;
-  if (pax >= 7) return '7+ Players';
-  if (pax >= 4) return '4–6 Players';
-  if (isComp) return '4–6 Players';
-  if (pax > 0) return '2–3 Players';
-  return 'Not Set';
+  // 2. Non-complimentary bookings: player category is strictly derived from actual players count
+  return getPlayerCategory(booking.players);
 };
 
 export const GAMES = [
