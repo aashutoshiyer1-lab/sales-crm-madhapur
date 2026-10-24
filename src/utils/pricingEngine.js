@@ -141,5 +141,5 @@ export const getBookingCategory = (booking, allBookings = []) => {
   }
 
   // 2. Non-complimentary bookings: player category is strictly derived from actual players count
-  return getPlayerCategory(booking.players);
+  return getPlayerCategory(booking.players !== undefined ? booking.players : booking.paxCount);
 };

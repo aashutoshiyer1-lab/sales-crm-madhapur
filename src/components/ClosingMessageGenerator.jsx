@@ -285,19 +285,22 @@ export const calculateGameStats = (gameName, shiftBookings = [], allBookings = [
 
   gameBookings.forEach(b => {
     const pax = getPax(b);
-    // Use categoryOverride if set, or fallback to pax count logic
-    let cat = b.categoryOverride || b.playerCategory || b.customCategory;
-    if (!cat) {
-      if (pax >= 7) cat = '7+';
-      else if (pax >= 4) cat = '4-6';
-      else if (isPureComplimentary(b)) cat = '4-6'; // Smart complimentary default
-      else cat = '2-3';
-    }
+    // Strictly synchronize player category with Sales and Reports resolution
+    const resolvedCat = getBookingCategory(b, shiftBookings);
 
-    if (cat.includes('2-3') || cat.includes('2–3')) bracket2to3 += pax;
-    else if (cat.includes('4-6') || cat.includes('4–6')) bracket4to6 += pax;
-    else if (cat.includes('7+') || cat.includes('7')) bracket7plus += pax;
-    else bracket2to3 += pax;
+    if (resolvedCat.includes('2-3') || resolvedCat.includes('2–3') || (pax > 0 && pax <= 3 && !isPureComplimentary(b))) {
+      bracket2to3 += pax;
+    } else if (resolvedCat.includes('4-6') || resolvedCat.includes('4–6') || (pax >= 4 && pax <= 6 && !isPureComplimentary(b))) {
+      bracket4to6 += pax;
+    } else if (resolvedCat.includes('7+') || resolvedCat.includes('7') || (pax >= 7 && !isPureComplimentary(b))) {
+      bracket7plus += pax;
+    } else if (pax <= 3) {
+      bracket2to3 += pax;
+    } else if (pax <= 6) {
+      bracket4to6 += pax;
+    } else {
+      bracket7plus += pax;
+    }
   });
 
   // 3. Game-Wise Payment Channels Breakdown
