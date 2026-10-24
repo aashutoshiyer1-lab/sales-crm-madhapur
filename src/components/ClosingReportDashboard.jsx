@@ -2,13 +2,17 @@
 import ClosingMessageGenerator, {
   formatCustomNoteGrammar,
   generateBookingNoteSentence,
-  executePrintWindow
+  executePrintWindow,
+  calculateGameStats,
+  isPureComplimentary
 } from './ClosingMessageGenerator';
 
 export {
   formatCustomNoteGrammar,
   generateBookingNoteSentence,
-  executePrintWindow
+  executePrintWindow,
+  calculateGameStats,
+  isPureComplimentary
 };
 
 export default ClosingMessageGenerator;

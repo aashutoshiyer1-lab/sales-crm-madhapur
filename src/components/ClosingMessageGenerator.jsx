@@ -230,6 +230,120 @@ export const getGameDiscounts = (gameKey, dayBookings = [], manualDiscountEntrie
 };
 
 /**
+ * Helper: Checks if a booking is a pure complimentary companion game (0 payment)
+ */
+export const isPureComplimentary = (b) => {
+  if (!b) return false;
+  const amount = Number(b.totalAmount !== undefined ? b.totalAmount : b.finalTotal) || 0;
+  if (amount > 0) return false;
+  if (b.offerId === 'custom_discount' || Boolean(b.customDiscountReason)) return false;
+  const offer = (b.offerName || '').toLowerCase();
+  return b.offerId === 'complimentary' || offer.includes('complimentary');
+};
+
+/**
+ * Generic Game Stats & Payment Calculator
+ * Dynamic helper function that computes all metrics, player brackets, and payment breakdowns for ANY game
+ */
+export const calculateGameStats = (gameName, shiftBookings = [], allBookings = []) => {
+  // Helper to match game name accurately (exact, shorthand or partial)
+  const matchesGame = (bName, target) => {
+    if (!bName || !target) return false;
+    const bLower = bName.trim().toLowerCase();
+    const tLower = target.trim().toLowerCase();
+    if (bLower === tLower) return true;
+    if (tLower === 'bank' && bLower.includes('bank')) return true;
+    if (tLower === 'mummy' && bLower.includes('mummy')) return true;
+    if (tLower === 'prison' && bLower.includes('prison')) return true;
+    if ((tLower === 'biryani' || tLower === 'recipe') && (bLower.includes('biryani') || bLower.includes('recipe'))) return true;
+    if (bLower.includes(tLower) || tLower.includes(bLower)) return true;
+    return false;
+  };
+
+  const getPax = (b) => Number(b.paxCount !== undefined ? b.paxCount : b.players) || 0;
+  const getAmt = (b) => Number(b.totalAmount !== undefined ? b.totalAmount : b.finalTotal) || 0;
+
+  // Filter bookings strictly for this specific game
+  const gameBookings = (shiftBookings || []).filter(b => 
+    b.gameName && matchesGame(b.gameName, gameName) && (b.status || '').toLowerCase() !== 'cancelled'
+  );
+
+  // 1. Sessions & Basic Totals
+  const sessions = gameBookings.filter(b => !isPureComplimentary(b)).length;
+  const totalGames = gameBookings.reduce((sum, b) => sum + getPax(b), 0);
+  const totalSale = gameBookings.reduce((sum, b) => sum + getAmt(b), 0);
+  
+  const complPax = gameBookings
+    .filter(isPureComplimentary)
+    .reduce((sum, b) => sum + getPax(b), 0);
+  const complCount = String(complPax).padStart(2, '0');
+
+  // 2. Bracket Splits (2-3, 4-6, 7+)
+  let bracket2to3 = 0;
+  let bracket4to6 = 0;
+  let bracket7plus = 0;
+
+  gameBookings.forEach(b => {
+    const pax = getPax(b);
+    // Use categoryOverride if set, or fallback to pax count logic
+    let cat = b.categoryOverride || b.playerCategory || b.customCategory;
+    if (!cat) {
+      if (pax >= 7) cat = '7+';
+      else if (pax >= 4) cat = '4-6';
+      else if (isPureComplimentary(b)) cat = '4-6'; // Smart complimentary default
+      else cat = '2-3';
+    }
+
+    if (cat.includes('2-3') || cat.includes('2–3')) bracket2to3 += pax;
+    else if (cat.includes('4-6') || cat.includes('4–6')) bracket4to6 += pax;
+    else if (cat.includes('7+') || cat.includes('7')) bracket7plus += pax;
+    else bracket2to3 += pax;
+  });
+
+  // 3. Game-Wise Payment Channels Breakdown
+  const payments = {
+    Cash: 0,
+    Card: 0,
+    'UPI-New Pay': 0,
+    'Prepaid by District': 0,
+    'Razorpay (Website Bookings)': 0,
+    'Activity Kids': 0
+  };
+
+  gameBookings.forEach(b => {
+    if (b.payments) {
+      Object.keys(payments).forEach(method => {
+        let val = Number(b.payments[method]) || 0;
+        // Normalize naming variants
+        if (!val && method === 'Razorpay (Website Bookings)') {
+          val = Number(b.payments['Razorpay( website bookings)']) || Number(b.payments['Razorpay']) || 0;
+        }
+        if (!val && method === 'Activity Kids') {
+          val = Number(b.payments['Activity kids']) || 0;
+        }
+        if (!val && method === 'UPI-New Pay') {
+          val = Number(b.payments['UPI/New Pay']) || Number(b.payments['UPI']) || 0;
+        }
+        payments[method] += val;
+      });
+    }
+  });
+
+  return {
+    gameName,
+    sessions,
+    totalGames,
+    totalSale,
+    complCount,
+    bracket2to3,
+    bracket4to6,
+    bracket7plus,
+    payments,
+    bookings: gameBookings
+  };
+};
+
+/**
  * Opens a print window with monospace typography and triggers window.print()
  */
 export const executePrintWindow = (title, textContent) => {
@@ -325,6 +439,7 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
   const [newDiscNote, setNewDiscNote] = useState("");
 
   const [copiedStatus, setCopiedStatus] = useState(false);
+  const [showDetailedBreakdown, setShowDetailedBreakdown] = useState({});
 
   // Guard to prevent saving previous date's in-flight state to the newly selected date
   const loadedDateRef = useRef(closingDate);
@@ -541,6 +656,14 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
       gameStats.biryani.sale
     );
   }, [gameStats]);
+
+  // Dynamic Game-Wise Payment & Player Bracket Breakdown (via calculateGameStats)
+  const detailedGameStats = useMemo(() => ({
+    bank: calculateGameStats('Bank', dayBookings),
+    mummy: calculateGameStats('Mummy', dayBookings),
+    prison: calculateGameStats('Prison', dayBookings),
+    biryani: calculateGameStats('Biryani', dayBookings)
+  }), [dayBookings]);
 
   // Format Date to DD-MM-YYYY
   const formattedDisplayDate = useMemo(() => {
@@ -978,6 +1101,74 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
     window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
   };
 
+  // Helper to render dynamic game-wise player brackets & payment channels breakdown
+  const renderGameBreakdown = (key, detailedStats) => {
+    if (!detailedStats) return null;
+    const isExpanded = Boolean(showDetailedBreakdown[key]);
+    const activePayments = Object.entries(detailedStats.payments || {}).filter(([, val]) => Number(val) > 0);
+
+    return (
+      <div className="col-span-3 mt-2 pt-2 border-t border-blue-200/70">
+        <button
+          type="button"
+          onClick={() => setShowDetailedBreakdown(prev => ({ ...prev, [key]: !prev[key] }))}
+          className="flex items-center justify-between w-full text-[10px] font-black text-blue-900 hover:text-blue-950 transition cursor-pointer select-none"
+        >
+          <span className="flex items-center space-x-1">
+            <span>📊 Brackets & Payment Breakdown</span>
+          </span>
+          <span className="text-[9px] font-bold text-blue-700 bg-blue-100/80 px-1.5 py-0.5 rounded border border-blue-200">
+            {isExpanded ? 'Hide ▲' : 'View Details ▼'}
+          </span>
+        </button>
+
+        {isExpanded && (
+          <div className="mt-2 p-2.5 bg-white/95 rounded-xl border border-blue-200 space-y-2 text-[11px] animate-fadeIn shadow-xs">
+            {/* Player Brackets Split */}
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">
+                Player Brackets (Pax)
+              </span>
+              <div className="grid grid-cols-3 gap-1.5 text-center font-mono font-bold">
+                <div className="bg-emerald-50 text-emerald-950 p-1.5 rounded-lg border border-emerald-200">
+                  <span className="text-[9px] block text-emerald-700 font-sans font-bold">2–3 Pax</span>
+                  <span className="text-xs font-black">{detailedStats.bracket2to3}</span>
+                </div>
+                <div className="bg-blue-50 text-blue-950 p-1.5 rounded-lg border border-blue-200">
+                  <span className="text-[9px] block text-blue-700 font-sans font-bold">4–6 Pax</span>
+                  <span className="text-xs font-black">{detailedStats.bracket4to6}</span>
+                </div>
+                <div className="bg-purple-50 text-purple-950 p-1.5 rounded-lg border border-purple-200">
+                  <span className="text-[9px] block text-purple-700 font-sans font-bold">7+ Pax</span>
+                  <span className="text-xs font-black">{detailedStats.bracket7plus}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment Channels Breakdown */}
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">
+                Game Payments
+              </span>
+              {activePayments.length > 0 ? (
+                <div className="space-y-1 font-mono text-[10px]">
+                  {activePayments.map(([mode, val]) => (
+                    <div key={mode} className="flex justify-between items-center text-slate-700 bg-blue-50/40 px-2 py-0.5 rounded">
+                      <span className="font-bold text-slate-600 truncate max-w-[140px]">{mode}:</span>
+                      <span className="font-black text-blue-950">₹{val}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-slate-400 italic text-[10px] block py-0.5">No payments recorded</span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
@@ -1084,6 +1275,7 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                       ))}
                     </div>
                   )}
+                  {renderGameBreakdown('bank', detailedGameStats.bank)}
                 </div>
               </div>
 
@@ -1118,6 +1310,7 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                       ))}
                     </div>
                   )}
+                  {renderGameBreakdown('mummy', detailedGameStats.mummy)}
                 </div>
               </div>
 
@@ -1152,6 +1345,7 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                       ))}
                     </div>
                   )}
+                  {renderGameBreakdown('prison', detailedGameStats.prison)}
                 </div>
               </div>
 
@@ -1186,6 +1380,7 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                       ))}
                     </div>
                   )}
+                  {renderGameBreakdown('biryani', detailedGameStats.biryani)}
                 </div>
               </div>
             </div>
