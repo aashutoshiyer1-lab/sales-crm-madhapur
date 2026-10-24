@@ -613,10 +613,10 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
   // Pure complimentary sessions (finalTotal === 0 / 100% off) are excluded from paid session counts and counted separately!
   const gameStats = useMemo(() => {
     const stats = {
-      bank: { name: "Bank", games: 0, players: 0, sale: 0, complimentaryGames: 0, complimentaryPlayers: 0 },
-      mummy: { name: "Mummy", games: 0, players: 0, sale: 0, complimentaryGames: 0, complimentaryPlayers: 0 },
-      prison: { name: "Prison", games: 0, players: 0, sale: 0, complimentaryGames: 0, complimentaryPlayers: 0 },
-      biryani: { name: "Biryani", games: 0, players: 0, sale: 0, complimentaryGames: 0, complimentaryPlayers: 0 }
+      bank: { name: "Bank", games: 0, players: 0, sale: 0, paidGames: 0, paidPlayers: 0, complimentaryGames: 0, complimentaryPlayers: 0 },
+      mummy: { name: "Mummy", games: 0, players: 0, sale: 0, paidGames: 0, paidPlayers: 0, complimentaryGames: 0, complimentaryPlayers: 0 },
+      prison: { name: "Prison", games: 0, players: 0, sale: 0, paidGames: 0, paidPlayers: 0, complimentaryGames: 0, complimentaryPlayers: 0 },
+      biryani: { name: "Biryani", games: 0, players: 0, sale: 0, paidGames: 0, paidPlayers: 0, complimentaryGames: 0, complimentaryPlayers: 0 }
     };
 
     dayBookings.forEach(b => {
@@ -630,14 +630,18 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
 
       if (key && stats[key]) {
         const isComp = isComplimentaryBooking(b) || b.offerId === 'complimentary' || Number(b.finalTotal) === 0;
+        const pCount = Number(b.players || b.paxCount) || 0;
         if (isComp) {
           stats[key].complimentaryGames += 1;
-          stats[key].complimentaryPlayers += Number(b.players) || 0;
+          stats[key].complimentaryPlayers += pCount;
         } else {
-          stats[key].games += 1;
-          stats[key].players += Number(b.players) || 0;
+          stats[key].paidGames += 1;
+          stats[key].paidPlayers += pCount;
           stats[key].sale += getPaidTotal(b.payments);
         }
+        // Total games & players include complimentary games as well
+        stats[key].games += 1;
+        stats[key].players += pCount;
       }
     });
 
@@ -1255,14 +1259,14 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                     <span className="text-[10px] text-slate-500 font-bold block">No. of Games</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.bank.games)}*</span>
                     {gameStats.bank.complimentaryGames > 0 && (
-                      <span className="block text-[10px] font-black text-emerald-700">+{pad2(gameStats.bank.complimentaryGames)} Comp</span>
+                      <span className="block text-[10px] font-black text-emerald-700">({pad2(gameStats.bank.paidGames)} Paid + {pad2(gameStats.bank.complimentaryGames)} Comp)</span>
                     )}
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">Total Players</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.bank.players)}*</span>
                     {gameStats.bank.complimentaryPlayers > 0 && (
-                      <span className="block text-[10px] font-bold text-emerald-700">+{pad2(gameStats.bank.complimentaryPlayers)} kid</span>
+                      <span className="block text-[10px] font-bold text-emerald-700">({pad2(gameStats.bank.paidPlayers)} Paid + {pad2(gameStats.bank.complimentaryPlayers)} kid)</span>
                     )}
                   </div>
                   <div>
@@ -1290,14 +1294,14 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                     <span className="text-[10px] text-slate-500 font-bold block">No. of Games</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.mummy.games)}*</span>
                     {gameStats.mummy.complimentaryGames > 0 && (
-                      <span className="block text-[10px] font-black text-emerald-700">+{pad2(gameStats.mummy.complimentaryGames)} Comp</span>
+                      <span className="block text-[10px] font-black text-emerald-700">({pad2(gameStats.mummy.paidGames)} Paid + {pad2(gameStats.mummy.complimentaryGames)} Comp)</span>
                     )}
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">Total Players</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.mummy.players)}*</span>
                     {gameStats.mummy.complimentaryPlayers > 0 && (
-                      <span className="block text-[10px] font-bold text-emerald-700">+{pad2(gameStats.mummy.complimentaryPlayers)} kid</span>
+                      <span className="block text-[10px] font-bold text-emerald-700">({pad2(gameStats.mummy.paidPlayers)} Paid + {pad2(gameStats.mummy.complimentaryPlayers)} kid)</span>
                     )}
                   </div>
                   <div>
@@ -1325,14 +1329,14 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                     <span className="text-[10px] text-slate-500 font-bold block">No. of Games</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.prison.games)}*</span>
                     {gameStats.prison.complimentaryGames > 0 && (
-                      <span className="block text-[10px] font-black text-emerald-700">+{pad2(gameStats.prison.complimentaryGames)} Comp</span>
+                      <span className="block text-[10px] font-black text-emerald-700">({pad2(gameStats.prison.paidGames)} Paid + {pad2(gameStats.prison.complimentaryGames)} Comp)</span>
                     )}
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">Total Players</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.prison.players)}*</span>
                     {gameStats.prison.complimentaryPlayers > 0 && (
-                      <span className="block text-[10px] font-bold text-emerald-700">+{pad2(gameStats.prison.complimentaryPlayers)} kid</span>
+                      <span className="block text-[10px] font-bold text-emerald-700">({pad2(gameStats.prison.paidPlayers)} Paid + {pad2(gameStats.prison.complimentaryPlayers)} kid)</span>
                     )}
                   </div>
                   <div>
@@ -1360,14 +1364,14 @@ export default function ClosingMessageGenerator({ bookings, selectedDate, setSel
                     <span className="text-[10px] text-slate-500 font-bold block">No. of Games</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.biryani.games)}*</span>
                     {gameStats.biryani.complimentaryGames > 0 && (
-                      <span className="block text-[10px] font-black text-emerald-700">+{pad2(gameStats.biryani.complimentaryGames)} Comp</span>
+                      <span className="block text-[10px] font-black text-emerald-700">({pad2(gameStats.biryani.paidGames)} Paid + {pad2(gameStats.biryani.complimentaryGames)} Comp)</span>
                     )}
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold block">Total Players</span>
                     <span className="font-mono font-black text-slate-950 text-sm">*{pad2(gameStats.biryani.players)}*</span>
                     {gameStats.biryani.complimentaryPlayers > 0 && (
-                      <span className="block text-[10px] font-bold text-emerald-700">+{pad2(gameStats.biryani.complimentaryPlayers)} kid</span>
+                      <span className="block text-[10px] font-bold text-emerald-700">({pad2(gameStats.biryani.paidPlayers)} Paid + {pad2(gameStats.biryani.complimentaryPlayers)} kid)</span>
                     )}
                   </div>
                   <div>
